@@ -168,25 +168,25 @@ public class MainActivity extends Activity {
             return;
         }
         if(!fullAccess()){requestMedia();return;}
+        connectGitHubAndStartSync();
+    }
+
+    void connectGitHubAndStartSync(){
         GitHubAuth.ensureAccess(this,(tok,err)->{
             if(err!=null){setStatus("GitHub connection needed: "+err.getMessage());return;}
             new Thread(()->{
-                try{GitHubAuth.validateRepository(MediaSyncService.DEFAULT_REPO,tok);runOnUiThread(()->{
-                    Intent s=new Intent(this,MediaSyncService.class);
-                    s.setAction(MediaSyncService.ACTION_START);
-                    startForegroundService(s);
-                    syncButton.setText("SYNC ON");
-                    setStatus("Direct Sync is on · visible Android notification required.");
-                });}catch(Exception e){setStatus("GitHub connection failed: "+e.getMessage());}
+                try{
+                    GitHubAuth.validateRepository(MediaSyncService.DEFAULT_REPO,tok);
+                    runOnUiThread(()->{
+                        Intent s=new Intent(this,MediaSyncService.class);
+                        s.setAction(MediaSyncService.ACTION_START);
+                        startForegroundService(s);
+                        syncButton.setText("SYNC ON");
+                        setStatus("Direct Sync is on · visible Android notification required.");
+                    });
+                }catch(Exception e){setStatus("GitHub connection failed: "+e.getMessage());}
             }).start();
         });
-        return;
-        /* legacy token path removed */
-        Intent s=new Intent(this,MediaSyncService.class);
-        s.setAction(MediaSyncService.ACTION_START);
-        startForegroundService(s);
-        syncButton.setText("SYNC ON");
-        setStatus("Direct Sync is on · visible Android notification required.");
     }
 
     void pick(String slot){
