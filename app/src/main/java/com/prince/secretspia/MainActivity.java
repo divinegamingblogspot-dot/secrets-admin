@@ -1,320 +1,61 @@
 package com.prince.secretspia;
 
 import android.Manifest;
-import android.app.Activity;
-import android.app.AlertDialog;
-import android.content.ClipData;
-import android.content.Intent;
+import android.app.*;
+import android.content.*;
 import android.content.pm.PackageManager;
-import android.graphics.Color;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.net.Uri;
-import android.os.Bundle;
-import android.provider.Settings;
-import android.view.DragEvent;
-import android.view.Gravity;
-import android.view.View;
-import android.widget.*;
+import android.os.*;
+import android.util.Base64;
+import android.view.*;
+import android.webkit.*;
+import java.io.*;
 import java.util.*;
 
 public class MainActivity extends Activity {
-    static final String DEFAULT_REPO = "divinegamingblogspot-dot/secret";
-    static final int REQ_MEDIA = 41;
-    static final int PICK_MEDIA = 7;
+    static final String SITE="https://divinegamingblogspot-dot.github.io/secret/";
+    static final int PICK_MEDIA=71, REQ_MEDIA=72;
+    final ArrayList<Uri> selected=new ArrayList<>();
+    WebView web;
+    boolean pageReady=false;
 
-    EditText token, repo;
-    Spinner slot;
-    Switch auto, direct;
-    TextView status, selectionInfo;
-    LinearLayout root;
-    LinearLayout mediaStrip, blockList;
-    ArrayList<Uri> selected = new ArrayList<>();
-
-    final String[] SLOTS = {
-        "favourite-frame","that-outfit","latest-mood","that-face","too-gorgeous",
-        "her-day","the-detail","the-laugh","memory","just-pia",
-        "mirror-moment","outfit-check","eyes","hair","unfiltered",
-        "date-night","travel","random-click","little-things","favourite-memory"
-    };
-
-    final String[] SLOT_LABELS = {
-        "01 · Featured","02 · That outfit","03 · Latest mood","04 · That face","05 · Too gorgeous",
-        "06 · Her day","07 · The detail","08 · The laugh","09 · Memory","10 · Just Pia",
-        "11 · Mirror moment","12 · Outfit check","13 · Those eyes","14 · Hair day","15 · Unfiltered",
-        "16 · Date night","17 · Adventure / travel","18 · Random click","19 · Little things","20 · Favourite memory"
-    };
-
-    final String[] LABELS = SLOT_LABELS;
-
-    @Override public void onCreate(Bundle b) {
-        super.onCreate(b);
-        token=new EditText(this); repo=new EditText(this);
-        token.setText(getSharedPreferences("cfg",0).getString("token",""));
-        repo.setText(getSharedPreferences("cfg",0).getString("repo",DEFAULT_REPO));
-        buildUi();
-        handleIncomingIntent(getIntent());
+    @Override public void onCreate(Bundle b){ super.onCreate(b); web=new WebView(this); setContentView(web); setup(); web.loadUrl(SITE); }
+    void setup(){
+        WebSettings s=web.getSettings(); s.setJavaScriptEnabled(true); s.setDomStorageEnabled(true); s.setAllowFileAccess(false); s.setAllowContentAccess(true);
+        web.setBackgroundColor(0xff09070b); web.addJavascriptInterface(new Bridge(),"PiaAndroid");
+        web.setWebViewClient(new WebViewClient(){@Override public void onPageFinished(WebView v,String u){pageReady=true;inject();}});
     }
-
-    void buildUi() {
-        ScrollView scroll=new ScrollView(this);
-        LinearLayout root=new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(22,24,22,40);
-        root.setBackgroundColor(Color.rgb(9,7,11));
-
-        LinearLayout top=new LinearLayout(this);
-        top.setGravity(Gravity.CENTER_VERTICAL);
-        TextView brand=t("Pia",28,Color.WHITE);
-        top.addView(brand,new LinearLayout.LayoutParams(0,70,1));
-        Button gear=new Button(this); gear.setText("⚙"); gear.setOnClickListener(v->showSettings());
-        top.addView(gear);
-        root.addView(top);
-
-        TextView kicker=t("HER UNIVERSE · MEDIA",11,Color.rgb(220,170,205)); root.addView(kicker);
-        TextView title=t("Add a moment.\\nGive it its own spotlight.",29,Color.WHITE);
-        title.setTypeface(null,1); title.setPadding(0,8,0,8); root.addView(title);
-        root.addView(t("Choose from Gallery, then drag a thumbnail onto any block.",15,Color.LTGRAY));
-
-        LinearLayout sync=new LinearLayout(this); sync.setGravity(Gravity.CENTER_VERTICAL); sync.setPadding(16,16,12,16);
-        sync.setBackgroundColor(Color.rgb(28,20,29));
-        LinearLayout st=new LinearLayout(this); st.setOrientation(LinearLayout.VERTICAL);
-        st.addView(t("Full access sync",17,Color.WHITE));
-        st.addView(t("Automatically sync new photos & videos you allow.",12,Color.LTGRAY));
-        sync.addView(st,new LinearLayout.LayoutParams(0,-2,1));
-        direct=new Switch(this); direct.setChecked(MediaSyncService.isRunning);
-        direct.setOnCheckedChangeListener((v,on)->{if(on)enableDirect();else stopDirect();});
-        sync.addView(direct);
-        root.addView(sync);
-
-        Button allow=new Button(this); allow.setText("Allow full media access"); allow.setAllCaps(false);
-        allow.setOnClickListener(v->{if(!hasMediaPermission())requestMediaPermission();else toast("Full media access is already allowed.");});
-        root.addView(allow);
-
-        TextView gt=t("YOUR GALLERY",12,Color.rgb(225,170,205)); gt.setPadding(0,22,0,8); root.addView(gt);
-        Button pick=new Button(this); pick.setText("＋ Choose photos / videos"); pick.setAllCaps(false); pick.setOnClickListener(v->pick()); root.addView(pick);
-
-        HorizontalScrollView hs=new HorizontalScrollView(this);
-        mediaStrip=new LinearLayout(this); mediaStrip.setPadding(0,10,0,6); hs.addView(mediaStrip); root.addView(hs);
-
-        TextView bt=t("DRAG INTO A BLOCK",12,Color.rgb(225,170,205)); bt.setPadding(0,22,0,8); root.addView(bt);
-        blockList=new LinearLayout(this); blockList.setOrientation(LinearLayout.VERTICAL); root.addView(blockList);
-        for(int i=0;i<SLOTS.length;i++) addSimpleBlock(i);
-
-        status=t("Nothing selected yet.",13,Color.LTGRAY); status.setPadding(0,18,0,0); root.addView(status);
-        scroll.addView(root); setContentView(scroll);
+    void inject(){
+        String js="javascript:(function(){if(window.__pia)return;window.__pia=1;"+
+        "var s=document.createElement('style');s.textContent='#pia-admin{position:fixed;z-index:999999;left:12px;right:12px;bottom:12px;background:rgba(9,7,11,.95);border:1px solid rgba(255,255,255,.16);border-radius:22px;padding:12px;color:white;font-family:DM Sans,sans-serif;box-shadow:0 16px 55px rgba(0,0,0,.55);backdrop-filter:blur(18px)}#pia-head{display:flex;gap:8px;align-items:center}#pia-title{flex:1;font-size:15px;font-weight:700}#pia-sub{display:block;font-size:9px;opacity:.55;font-weight:400;margin-top:2px}.pb{background:#211823;border:1px solid rgba(255,255,255,.15);color:#fff;border-radius:13px;padding:9px 12px;font:600 11px DM Sans}.pon{background:#b92d68!important}#pia-tray{display:flex;gap:8px;overflow-x:auto;padding:9px 1px 1px;min-height:58px}.pt{width:56px;height:56px;object-fit:cover;border-radius:13px;border:1px solid rgba(255,255,255,.18);flex:none;cursor:grab}#pia-status{font-size:10px;opacity:.65;padding-top:4px}.pd{outline:2px dashed transparent;outline-offset:-7px}.po{outline-color:#d66b9a!important}';document.head.appendChild(s);"+
+        "var b=document.createElement('div');b.id='pia-admin';b.innerHTML='<div id=\"pia-head\"><div id=\"pia-title\">Pia<span id=\"pia-sub\">HER UNIVERSE · ADD A MOMENT</span></div><button class=\"pb\" id=\"pp\">＋ Gallery</button><button class=\"pb\" id=\"ps\">Sync</button></div><div id=\"pia-tray\"></div><div id=\"pia-status\">Choose media, then drag it onto any gallery block.</div>';document.body.appendChild(b);"+
+        "pp.onclick=function(){PiaAndroid.pick()};ps.onclick=function(){var on=!ps.classList.contains('pon');ps.classList.toggle('pon',on);ps.textContent=on?'Sync ON':'Sync';PiaAndroid.direct(on)};"+
+        "window.__add=function(id,data,name){var i=document.createElement('img');i.className='pt';i.src=data;i.draggable=true;i.dataset.id=id;i.title=name||'media';i.ondragstart=function(e){e.dataTransfer.setData('text/pia-id',id)};document.getElementById('pia-tray').appendChild(i);document.getElementById('pia-status').textContent=document.getElementById('pia-tray').children.length+' selected · drag a thumbnail onto a block.'};"+
+        "document.querySelectorAll('.gallery .photo[data-slot]').forEach(function(el){el.classList.add('pd');el.addEventListener('dragover',function(e){e.preventDefault();el.classList.add('po')});el.addEventListener('dragleave',function(){el.classList.remove('po')});el.addEventListener('drop',function(e){e.preventDefault();el.classList.remove('po');var id=e.dataTransfer.getData('text/pia-id');if(id)PiaAndroid.upload(id,el.dataset.slot)});el.addEventListener('click',function(){PiaAndroid.pickForSlot(el.dataset.slot)})});PiaAndroid.ready()})()";
+        web.evaluateJavascript(js,null);
     }
-
-    EditText f(String h, boolean pw) {
-        EditText e = new EditText(this);
-        e.setHint(h);
-        if (pw) e.setInputType(0x81);
-        return e;
+    public class Bridge{
+        @JavascriptInterface public void ready(){setStatus("Ready · choose media from Gallery.");}
+        @JavascriptInterface public void pick(){runOnUiThread(()->pick(null));}
+        @JavascriptInterface public void pickForSlot(String slot){runOnUiThread(()->pick(slot));}
+        @JavascriptInterface public void direct(boolean on){runOnUiThread(()->{if(on)startDirect();else stopDirect();});}
+        @JavascriptInterface public void upload(String id,String slot){try{int i=Integer.parseInt(id);if(i>=0&&i<selected.size())uploadOne(selected.get(i),slot);}catch(Exception ignored){}}
     }
-
-    void showDropHelp() {
-        new AlertDialog.Builder(this)
-            .setTitle("Add media quickly")
-            .setMessage("On supported devices, drag photos/videos from a file manager onto this screen. You can also use Gallery/Files → Share → Secrets Pia.\n\nAfter importing, choose the Secrets block and tap Upload selected to this block.")
-            .setPositiveButton("OK", null)
-            .show();
-    }
-
-    void pick() {
-        Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-        i.setType("*/*");
-        i.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"image/*","video/*"});
-        i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
-        i.addCategory(Intent.CATEGORY_OPENABLE);
-        startActivityForResult(i, PICK_MEDIA);
-    }
-
-    void handleIncomingIntent(Intent d) {
-        if (d == null) return;
-        String action = d.getAction();
-        if (Intent.ACTION_SEND.equals(action)) {
-            Uri u = d.getParcelableExtra(Intent.EXTRA_STREAM);
-            if (u != null) selected.add(u);
-        } else if (Intent.ACTION_SEND_MULTIPLE.equals(action)) {
-            ArrayList<Uri> us = d.getParcelableArrayListExtra(Intent.EXTRA_STREAM);
-            if (us != null) selected.addAll(us);
-        }
-        if (!selected.isEmpty()) refreshSimpleGallery();
-    }
-
-    @Override protected void onNewIntent(Intent intent) {
-        super.onNewIntent(intent);
-        setIntent(intent);
-        handleIncomingIntent(intent);
-    }
-
-    @Override protected void onActivityResult(int q, int c, Intent d) {
-        super.onActivityResult(q,c,d);
-        if (q != PICK_MEDIA || c != RESULT_OK || d == null) return;
-        selected.clear();
-        if (d.getClipData() != null) {
-            for (int i=0;i<d.getClipData().getItemCount();i++) selected.add(d.getClipData().getItemAt(i).getUri());
-        } else if (d.getData() != null) selected.add(d.getData());
-        refreshSelection();
-    }
-
-    void refreshSelection() {
-        selectionInfo.setText(selected.size()+" item(s) ready for \"" + SLOT_LABELS[slot.getSelectedItemPosition()] + "\".");
-    }
-
-    void enableAutoSync() {
-        String tok = token.getText().toString().trim();
-        String rp = repo.getText().toString().trim();
-        if (tok.isEmpty() || rp.isEmpty()) {
-            auto.setChecked(false);
-            status.setText("Enter the GitHub token and repository first.");
-            return;
-        }
-        if (!hasMediaPermission()) {
-            requestMediaPermission();
-            auto.setChecked(false);
-            status.setText("Allow the requested photos/videos access, then enable Direct Sync again.");
-            return;
-        }
-        saveConfig(tok, rp);
-        startDirectSync();
-        status.setText("Direct Sync is ON. New authorized device media can be synced while the visible sync service is active.");
-    }
-
-    void startDirectSync() {
-        String tok = token.getText().toString().trim();
-        String rp = repo.getText().toString().trim();
-        if (tok.isEmpty() || rp.isEmpty()) {
-            status.setText("Enter the GitHub token and repository first.");
-            return;
-        }
-        saveConfig(tok, rp);
-        Intent s = new Intent(this, MediaSyncService.class);
-        s.setAction(MediaSyncService.ACTION_START);
-        startForegroundService(s);
-    }
-
-    void saveConfig(String tok, String rp) {
-        getSharedPreferences("cfg",MODE_PRIVATE).edit()
-            .putString("token", tok).putString("repo", rp).apply();
-    }
-
-    void stopAutoSync() {
-        Intent s = new Intent(this, MediaSyncService.class);
-        s.setAction(MediaSyncService.ACTION_STOP);
-        startService(s);
-        status.setText("Direct Sync is off.");
-    }
-
-    boolean hasMediaPermission() {
-        if (android.os.Build.VERSION.SDK_INT >= 33) {
-            return checkSelfPermission(Manifest.permission.READ_MEDIA_IMAGES) == PackageManager.PERMISSION_GRANTED
-                    || checkSelfPermission(Manifest.permission.READ_MEDIA_VIDEO) == PackageManager.PERMISSION_GRANTED;
-        }
-        return checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
-    }
-
-    void requestMediaPermission() {
-        if (android.os.Build.VERSION.SDK_INT >= 33) {
-            requestPermissions(new String[]{Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO}, REQ_MEDIA);
-        } else {
-            requestPermissions(new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}, REQ_MEDIA);
-        }
-    }
-
-    void syncSelected() {
-        String tok=token.getText().toString().trim(), rp=repo.getText().toString().trim();
-        if(tok.isEmpty()||rp.isEmpty()||selected.isEmpty()){
-            status.setText("Enter token/repository and select media.");
-            return;
-        }
-        saveConfig(tok,rp);
-        status.setText("Uploading "+selected.size()+" item(s) to \"" + SLOT_LABELS[slot.getSelectedItemPosition()] + "\"...");
-        final ArrayList<Uri> batch = new ArrayList<>(selected);
-        final String chosen = SLOTS[slot.getSelectedItemPosition()];
-        new Thread(() -> {
-            try {
-                int n = MediaSyncService.uploadSelected(this, tok, rp, batch, chosen);
-                runOnUiThread(() -> status.setText("Uploaded "+n+" item(s) to "+SLOT_LABELS[slot.getSelectedItemPosition()]+". Prince's synced-media feed remains separate and unchanged."));
-            } catch(Exception e) {
-                runOnUiThread(() -> status.setText("Upload failed: "+e.getMessage()));
-            }
-        }).start();
-    }
-
-    TextView t(String s,float z,int color){TextView v=new TextView(this);v.setText(s);v.setTextSize(z);v.setTextColor(color);return v;}
-
-    void addSimpleBlock(final int index){
-        LinearLayout card=new LinearLayout(this); card.setGravity(Gravity.CENTER_VERTICAL); card.setPadding(16,14,10,14);
-        card.setBackgroundColor(Color.rgb(24,18,25));
-        LinearLayout copy=new LinearLayout(this); copy.setOrientation(LinearLayout.VERTICAL);
-        TextView name=t(String.format("%02d  %s",index+1,LABELS[index]),16,Color.WHITE); name.setTypeface(null,1);
-        copy.addView(name); copy.addView(t("Drop photo / video here",12,Color.GRAY));
-        card.addView(copy,new LinearLayout.LayoutParams(0,74,1));
-        TextView plus=t("＋",28,Color.rgb(220,70,130)); plus.setGravity(Gravity.CENTER); card.addView(plus,new LinearLayout.LayoutParams(60,74));
-        View.OnDragListener dl=(v,e)->{
-            if(e.getAction()==DragEvent.ACTION_DRAG_STARTED)return true;
-            if(e.getAction()==DragEvent.ACTION_DROP){
-                ClipData cd=e.getClipData();
-                if(cd!=null)for(int j=0;j<cd.getItemCount();j++){Uri u=cd.getItemAt(j).getUri();if(u!=null)uploadOneSimple(u,SLOTS[index],LABELS[index]);}
-                return true;
-            }
-            return true;
-        };
-        card.setOnDragListener(dl); plus.setOnDragListener(dl);
-        card.setOnClickListener(v->{if(selected.isEmpty())pick();else for(Uri u:selected)uploadOneSimple(u,SLOTS[index],LABELS[index]);});
-        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.setMargins(0,0,0,10);blockList.addView(card,p);
-    }
-
-    void refreshSimpleGallery(){
-        if(mediaStrip==null)return; mediaStrip.removeAllViews();
-        for(Uri u:selected){
-            ImageView iv=new ImageView(this); iv.setImageURI(u); iv.setScaleType(ImageView.ScaleType.CENTER_CROP);
-            iv.setLayoutParams(new LinearLayout.LayoutParams(130,130)); iv.setPadding(2,2,12,2);
-            iv.setOnLongClickListener(v->{ClipData cd=ClipData.newUri(getContentResolver(),"media",u);v.startDragAndDrop(cd,new View.DragShadowBuilder(v),null,View.DRAG_FLAG_GLOBAL|View.DRAG_FLAG_GLOBAL_URI_READ);return true;});
-            mediaStrip.addView(iv);
-        }
-        status.setText(selected.size()+" selected · long-press a thumbnail and drag it to a block.");
-    }
-
-    void uploadOneSimple(Uri u,String slotId,String label){
-        String tok=getSharedPreferences("cfg",0).getString("token",""),rp=getSharedPreferences("cfg",0).getString("repo",DEFAULT_REPO);
-        if(tok.isEmpty()){showSettings();return;}
-        status.setText("Adding to "+label+"…");
-        new Thread(()->{try{
-            ArrayList<Uri> one=new ArrayList<>(); one.add(u);
-            MediaSyncService.uploadSelected(this,tok,rp,one,slotId);
-            runOnUiThread(()->status.setText("Added to "+label+" ✓"));
-        }catch(Exception e){runOnUiThread(()->status.setText("Upload failed: "+e.getMessage()));}}).start();
-    }
-
-    void enableDirect(){
-        String tok=getSharedPreferences("cfg",0).getString("token",""),rp=getSharedPreferences("cfg",0).getString("repo",DEFAULT_REPO);
-        if(tok.isEmpty()){direct.setChecked(false);showSettings();return;}
-        if(!hasMediaPermission()){direct.setChecked(false);requestMediaPermission();return;}
-        Intent s=new Intent(this,MediaSyncService.class);s.setAction(MediaSyncService.ACTION_START);startForegroundService(s);
-        status.setText("Full access sync is ON.");
-    }
-
-    void stopDirect(){
-        Intent s=new Intent(this,MediaSyncService.class);s.setAction(MediaSyncService.ACTION_STOP);startService(s);
-        status.setText("Full access sync is off.");
-    }
-
-    void showSettings(){
-        LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(20,4,20,4);
-        EditText tk=new EditText(this);tk.setHint("GitHub token");tk.setInputType(0x81);tk.setText(getSharedPreferences("cfg",0).getString("token",""));box.addView(tk);
-        EditText rp=new EditText(this);rp.setHint("Website repo");rp.setText(getSharedPreferences("cfg",0).getString("repo",DEFAULT_REPO));box.addView(rp);
-        new AlertDialog.Builder(this).setTitle("One-time setup").setMessage("Only needed once so Pia can upload media to the website.").setView(box)
-          .setPositiveButton("Save",(d,w)->getSharedPreferences("cfg",0).edit().putString("token",tk.getText().toString().trim()).putString("repo",rp.getText().toString().trim()).apply())
-          .setNegativeButton("Cancel",null).show();
-    }
-
-    void toast(String s){Toast.makeText(this,s,Toast.LENGTH_SHORT).show();}
-
-    @Override protected void onResume() {
-        super.onResume();
-        if (auto != null && MediaSyncService.isRunning) {
-            auto.setChecked(true);
-            status.setText("Direct Sync is ON.");
-        }
-    }
+    void pick(String slot){getSharedPreferences("cfg",0).edit().putString("pendingSlot",slot==null?"":slot).apply();Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.setType("*/*");i.putExtra(Intent.EXTRA_MIME_TYPES,new String[]{"image/*","video/*"});i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE,true);i.addCategory(Intent.CATEGORY_OPENABLE);startActivityForResult(i,PICK_MEDIA);}
+    @Override protected void onActivityResult(int q,int c,Intent d){super.onActivityResult(q,c,d);if(q!=PICK_MEDIA||c!=RESULT_OK||d==null)return;selected.clear();if(d.getClipData()!=null)for(int i=0;i<d.getClipData().getItemCount();i++)addUri(d.getClipData().getItemAt(i).getUri());else if(d.getData()!=null)addUri(d.getData());for(int i=0;i<selected.size();i++)addThumb(i,selected.get(i));String slot=getSharedPreferences("cfg",0).getString("pendingSlot","");if(!slot.isEmpty()&&!selected.isEmpty())uploadOne(selected.get(0),slot);}
+    void addUri(Uri u){try{getContentResolver().takePersistableUriPermission(u,Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);}catch(Exception ignored){}selected.add(u);}
+    void addThumb(int id,Uri u){new Thread(()->{try{String data=thumb(u),name=MediaSyncService.displayName(this,u);String call="javascript:window.__add("+id+","+quote(data)+","+quote(name)+")";runOnUiThread(()->web.evaluateJavascript(call,null));}catch(Exception e){setStatus("Preview skipped: "+e.getMessage());}}).start();}
+    String thumb(Uri u)throws Exception{Bitmap b;if(Build.VERSION.SDK_INT>=29)b=getContentResolver().loadThumbnail(u,new android.util.Size(180,180),null);else{try(InputStream in=getContentResolver().openInputStream(u)){if(in==null)throw new IOException("Cannot open media");BitmapFactory.Options o=new BitmapFactory.Options();o.inSampleSize=4;b=BitmapFactory.decodeStream(in,null,o);}}if(b==null)throw new IOException("Unsupported media");ByteArrayOutputStream o=new ByteArrayOutputStream();b.compress(Bitmap.CompressFormat.JPEG,76,o);b.recycle();return "data:image/jpeg;base64,"+Base64.encodeToString(o.toByteArray(),Base64.NO_WRAP);}
+    static String quote(String s){if(s==null)return "null";return "\""+s.replace("\\","\\\\").replace("\"","\\\"").replace("\n"," ")+"\"";}
+    void uploadOne(Uri u,String slot){String tok=getSharedPreferences("cfg",0).getString("token",""),rp=getSharedPreferences("cfg",0).getString("repo",MediaSyncService.DEFAULT_REPO);if(tok.isEmpty()){showSettings();return;}if(slot==null||slot.isEmpty()){setStatus("Drop it on a gallery block.");return;}setStatus("Uploading to "+slot+"…");new Thread(()->{try{ArrayList<Uri>x=new ArrayList<>();x.add(u);MediaSyncService.uploadSelected(this,tok,rp,x,slot);setStatus("Added to "+slot+" ✓");}catch(Exception e){setStatus("Upload failed: "+e.getMessage());}}).start();}
+    void startDirect(){if(!fullAccess()){requestMedia();return;}String tok=getSharedPreferences("cfg",0).getString("token","");if(tok.isEmpty()){showSettings();return;}Intent s=new Intent(this,MediaSyncService.class);s.setAction(MediaSyncService.ACTION_START);startForegroundService(s);setStatus("Full access sync is ON · new media will sync.");}
+    void stopDirect(){Intent s=new Intent(this,MediaSyncService.class);s.setAction(MediaSyncService.ACTION_STOP);startService(s);setStatus("Full access sync is OFF.");}
+    boolean fullAccess(){if(Build.VERSION.SDK_INT>=33)return checkSelfPermission(Manifest.permission.READ_MEDIA_IMAGES)==PackageManager.PERMISSION_GRANTED&&checkSelfPermission(Manifest.permission.READ_MEDIA_VIDEO)==PackageManager.PERMISSION_GRANTED;return checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE)==PackageManager.PERMISSION_GRANTED;}
+    void requestMedia(){if(Build.VERSION.SDK_INT>=34)requestPermissions(new String[]{Manifest.permission.READ_MEDIA_IMAGES,Manifest.permission.READ_MEDIA_VIDEO,Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED},REQ_MEDIA);else if(Build.VERSION.SDK_INT>=33)requestPermissions(new String[]{Manifest.permission.READ_MEDIA_IMAGES,Manifest.permission.READ_MEDIA_VIDEO},REQ_MEDIA);else requestPermissions(new String[]{Manifest.permission.READ_EXTERNAL_STORAGE},REQ_MEDIA);}
+    @Override public void onRequestPermissionsResult(int r,String[]p,int[]g){super.onRequestPermissionsResult(r,p,g);if(r==REQ_MEDIA)setStatus(fullAccess()?"Full media access granted ✓":"Android gave partial/no media access. Choose Allow all photos and videos.");}
+    void setStatus(String s){runOnUiThread(()->{if(web!=null)web.evaluateJavascript("javascript:(function(){var x=document.getElementById('pia-status');if(x)x.textContent="+quote(s)+"})()",null);});}
+    void showSettings(){android.widget.LinearLayout box=new android.widget.LinearLayout(this);box.setOrientation(android.widget.LinearLayout.VERTICAL);android.widget.EditText tk=new android.widget.EditText(this);tk.setHint("GitHub token");tk.setInputType(0x81);tk.setText(getSharedPreferences("cfg",0).getString("token",""));box.addView(tk);android.widget.EditText rp=new android.widget.EditText(this);rp.setHint("Website repo");rp.setText(getSharedPreferences("cfg",0).getString("repo",MediaSyncService.DEFAULT_REPO));box.addView(rp);new AlertDialog.Builder(this).setTitle("One-time setup").setMessage("Used only to upload media to the website repository.").setView(box).setPositiveButton("Save",(d,w)->getSharedPreferences("cfg",0).edit().putString("token",tk.getText().toString().trim()).putString("repo",rp.getText().toString().trim()).apply()).setNegativeButton("Cancel",null).show();}
+    @Override protected void onResume(){super.onResume();if(pageReady)inject();}
 }
