@@ -41,7 +41,7 @@ public class MainActivity extends Activity {
         @JavascriptInterface public void pick(){runOnUiThread(()->pick(null));}
         @JavascriptInterface public void pickForSlot(String slot){runOnUiThread(()->pick(slot));}
         @JavascriptInterface public void direct(boolean on){runOnUiThread(()->{if(on)startDirect();else stopDirect();});}
-        @JavascriptInterface public void upload(String id,String slot){try{int i=Integer.parseInt(id);if(i>=0&&i<selected.size())uploadOne(selected.get(i),slot);}catch(Exception ignored){}}
+        @JavascriptInterface public void upload(String id,String slot){try{int i=Integer.parseInt(id);if(i>=0&&i<selected.size())runOnUiThread(()->uploadOne(selected.get(i),slot));}catch(Exception ignored){}}
     }
     void pick(String slot){getSharedPreferences("cfg",0).edit().putString("pendingSlot",slot==null?"":slot).apply();Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.setType("*/*");i.putExtra(Intent.EXTRA_MIME_TYPES,new String[]{"image/*","video/*"});i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE,true);i.addCategory(Intent.CATEGORY_OPENABLE);startActivityForResult(i,PICK_MEDIA);}
     @Override protected void onActivityResult(int q,int c,Intent d){super.onActivityResult(q,c,d);if(q!=PICK_MEDIA||c!=RESULT_OK||d==null)return;selected.clear();if(d.getClipData()!=null)for(int i=0;i<d.getClipData().getItemCount();i++)addUri(d.getClipData().getItemAt(i).getUri());else if(d.getData()!=null)addUri(d.getData());for(int i=0;i<selected.size();i++)addThumb(i,selected.get(i));String slot=getSharedPreferences("cfg",0).getString("pendingSlot","");if(!slot.isEmpty()&&!selected.isEmpty())uploadOne(selected.get(0),slot);}
