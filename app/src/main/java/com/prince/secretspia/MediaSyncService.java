@@ -98,7 +98,7 @@ public class MediaSyncService extends Service {
     static String displayName(Context c,Uri u){Cursor q=c.getContentResolver().query(u,null,null,null,null);if(q!=null)try{int i=q.getColumnIndex(OpenableColumns.DISPLAY_NAME);if(q.moveToFirst()&&i>=0)return q.getString(i);}finally{q.close();}return "media";}
     static String safe(String s){return s.replaceAll("[^A-Za-z0-9._-]","_");}
     static String extension(String name,String mime){int x=name.lastIndexOf('.');if(x>=0)return name.substring(x);if(mime!=null&&mime.contains("png"))return ".png";if(mime!=null&&mime.contains("webp"))return ".webp";if(mime!=null&&mime.contains("mp4"))return ".mp4";if(mime!=null&&mime.contains("quicktime"))return ".mov";return ".bin";}
-    static String js(String s){return s.replace("\\","\\\\").replace(""","\\"").replace("\n"," ");}
+    static String js(String s){return s==null?"":s.replace("\\","\\\\").replace("\"","\\\"").replace("\n"," ");}
 
     void put(String r,String p,byte[] d,String tok)throws Exception{putStatic(r,p,d,tok);}
     static void putStatic(String r,String p,byte[] d,String tok)throws Exception{
