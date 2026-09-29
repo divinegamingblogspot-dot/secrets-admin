@@ -23,7 +23,7 @@ public class MainActivity extends Activity {
 
     EditText token, repo;
     Spinner slot;
-    Switch auto;
+    Switch auto, direct;
     TextView status, selectionInfo;
     LinearLayout root;
     LinearLayout mediaStrip, blockList;
