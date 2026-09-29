@@ -43,8 +43,7 @@ public class MainActivity extends Activity {
 
     @Override public void onCreate(Bundle b) {
         super.onCreate(b);
-        buildUi();
-        handleIncomingIntent(getIntent());
+        token=new EditText(this); repo=new EditText(this);\n        token.setText(getSharedPreferences("cfg",0).getString("token",""));\n        repo.setText(getSharedPreferences("cfg",0).getString("repo",DEFAULT_REPO));\n        buildUi();\n        handleIncomingIntent(getIntent());
     }
 
     void buildUi() {
