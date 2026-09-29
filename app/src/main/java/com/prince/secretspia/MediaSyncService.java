@@ -98,18 +98,27 @@ public class MediaSyncService extends Service {
     static byte[] read(Context c,Uri u)throws Exception{try(InputStream in=c.getContentResolver().openInputStream(u);ByteArrayOutputStream o=new ByteArrayOutputStream()){if(in==null)throw new IOException("Cannot read media");byte[] b=new byte[8192];int n;while((n=in.read(b))!=-1)o.write(b,0,n);return o.toByteArray();}}
     static String displayName(Context c,Uri u){Cursor q=c.getContentResolver().query(u,null,null,null,null);if(q!=null)try{int i=q.getColumnIndex(OpenableColumns.DISPLAY_NAME);if(q.moveToFirst()&&i>=0)return q.getString(i);}finally{q.close();}return "media";}
     static String safe(String s){return s.replaceAll("[^A-Za-z0-9._-]","_");}
+    static String normalizeRepo(String s){
+        if(s==null)return "";
+        s=s.trim().replace("\\n","").replace("\\r","");
+        if(s.startsWith("git@github.com:"))s=s.substring("git@github.com:".length());
+        s=s.replaceFirst("^https?://(www\\.)?github\\.com/","");
+        s=s.replaceFirst("^/+", "").replaceFirst("/+$","");
+        if(s.endsWith(".git"))s=s.substring(0,s.length()-4);
+        return s;
+    }
     static String extension(String name,String mime){int x=name.lastIndexOf('.');if(x>=0)return name.substring(x);if(mime!=null&&mime.contains("png"))return ".png";if(mime!=null&&mime.contains("webp"))return ".webp";if(mime!=null&&mime.contains("mp4"))return ".mp4";if(mime!=null&&mime.contains("quicktime"))return ".mov";return ".bin";}
     static String js(String s){return s==null?"":s.replace("\\","\\\\").replace("\"","\\\"").replace("\n"," ");}
 
     void put(String r,String p,byte[] d,String tok)throws Exception{putStatic(r,p,d,tok);}
     static void putStatic(String r,String p,byte[] d,String tok)throws Exception{
-        String ep="https://api.github.com/repos/"+r+"/contents/"+p.replace(" ","%20");
+        String repo=normalizeRepo(r); if(repo.isEmpty()||!repo.contains("/"))throw new IOException("Enter the GitHub repo as owner/repository or paste its GitHub link."); String ep="https://api.github.com/repos/"+repo+"/contents/"+p.replace(" ","%20");
         String body="{\"message\":\"Add Secrets media\",\"content\":\""+Base64.encodeToString(d,Base64.NO_WRAP)+"\",\"branch\":\"main\"}";
         req("PUT",ep,tok,body);
     }
     void appendManifest(String r,String tok,String line)throws Exception{appendManifestStatic(r,tok,line);}
     static synchronized void appendManifestStatic(String r,String tok,String line)throws Exception{
-        String ep="https://api.github.com/repos/"+r+"/contents/media-manifest.jsonl";
+        String repo=normalizeRepo(r); if(repo.isEmpty()||!repo.contains("/"))throw new IOException("Enter the GitHub repo as owner/repository or paste its GitHub link."); String ep="https://api.github.com/repos/"+repo+"/contents/media-manifest.jsonl";
         String old="",sha=null;
         HttpURLConnection c=(HttpURLConnection)new URL(ep).openConnection();
         c.setRequestMethod("GET");
