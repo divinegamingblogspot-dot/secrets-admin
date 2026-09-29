@@ -96,7 +96,7 @@ public class MainActivity extends Activity {
             auto.setChecked(false);
             return;
         }
-        getPreferences(MODE_PRIVATE).edit().putString("token", tok).putString("repo", rp).apply();
+        getSharedPreferences("cfg",MODE_PRIVATE).edit().putString("token", tok).putString("repo", rp).apply();
         Intent s = new Intent(this, MediaSyncService.class);
         s.setAction(MediaSyncService.ACTION_START);
         startForegroundService(s);
