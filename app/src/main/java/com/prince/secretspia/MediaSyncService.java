@@ -17,7 +17,7 @@ import java.util.*;
 
 public class MediaSyncService extends Service {
     public static final String DEFAULT_REPO="divinegamingblogspot-dot/secret";
-    public static final String ACTION_START="START", ACTION_STOP="STOP";
+    public static final String ACTION_HARD_SYNC="HARD_SYNC", ACTION_STOP="STOP";
     public static volatile boolean isRunning=false;
     static final int NOTIFY=8081;
     Handler handler;
@@ -68,12 +68,12 @@ public class MediaSyncService extends Service {
     }
 
     int scanCollection(Uri base,String kind,String tok,String rp,int limit)throws Exception{
-        if(limit<=0)return 0;
+        if(limit<=0||!isRunning)return 0;
         String[] p={MediaStore.MediaColumns._ID,MediaStore.MediaColumns.DISPLAY_NAME,MediaStore.MediaColumns.MIME_TYPE,MediaStore.MediaColumns.SIZE,MediaStore.MediaColumns.DATE_ADDED};
         Cursor c=getContentResolver().query(base,p,null,null,MediaStore.MediaColumns.DATE_ADDED+" DESC");
         if(c==null)return 0;int n=0;
         try{
-            while(c.moveToNext()&&n<limit){
+            while(c.moveToNext()&&n<limit&&isRunning){
                 long id=c.getLong(0);String key=kind+":"+id;
                 if(getSharedPreferences("seen",MODE_PRIVATE).getBoolean(key,false))continue;
                 long size=c.getLong(3);
