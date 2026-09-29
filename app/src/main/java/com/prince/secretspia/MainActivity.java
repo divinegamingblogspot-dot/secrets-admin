@@ -55,8 +55,8 @@ public class MainActivity extends Activity {
         top.setGravity(Gravity.CENTER_VERTICAL);
         TextView title=label("PIA",16,true);
         top.addView(title,new LinearLayout.LayoutParams(0,-2,1));
-        addButton=button("＋ ADD");
-        placeButton=button("PLACE");
+        addButton=button("＋ ADD IMAGE");
+        placeButton=button("PLACE IMAGE");
         syncButton=button("SYNC");
         githubButton=button("GITHUB");
         top.addView(addButton);
@@ -68,7 +68,7 @@ public class MainActivity extends Activity {
         top.addView(githubButton);
         panel.addView(top);
 
-        selectedCount=label("No media selected · tap ADD to choose",11,false);
+        selectedCount=label("No media selected · tap ADD IMAGE to choose",11,false);
         selectedCount.setPadding(0,dp(8),0,dp(4));
         panel.addView(selectedCount);
 
@@ -113,7 +113,7 @@ public class MainActivity extends Activity {
     void injectTargets(){
         if(!pageReady||web==null)return;
         String js="javascript:(function(){"+
-            "window.__piaPlace="+(placing?"true":"false")+";"+
+            "window.__piaPlace="+((placing||!selected.isEmpty())?"true":"false")+";"+
             "var old=document.getElementById('pia-target-style');"+
             "if(!old){var st=document.createElement('style');st.id='pia-target-style';st.textContent="+q(
                 ".pia-target{outline:2px dashed rgba(224,119,166,.95)!important;outline-offset:-7px!important;cursor:pointer!important;position:relative!important;}"+
@@ -138,7 +138,7 @@ public class MainActivity extends Activity {
 
     void togglePlaceMode(){
         placing=!placing;
-        placeButton.setText(placing?"CANCEL":"PLACE");
+        placeButton.setText(placing?"CANCEL":"PLACE IMAGE");
         placeButton.setEnabled(!uploading);
         status.setText(placing?"Targets highlighted · tap a block":"Place mode off");
         injectTargets();
@@ -214,7 +214,7 @@ public class MainActivity extends Activity {
         }else if(!selected.isEmpty()){
             placing=true;
             placeButton.setText("CANCEL");
-            setStatus("Media ready · tap PLACE, then tap a highlighted block.");
+            setStatus("Image ready ✓ · all image blocks are highlighted. Tap any block to place it.");
             injectTargets();
         }
     }
@@ -259,7 +259,7 @@ public class MainActivity extends Activity {
         box.setBackgroundColor(Color.rgb(190,55,112));
         placing=true;
         placeButton.setText("CANCEL");
-        setStatus("Item "+(id+1)+" armed · tap a highlighted block to place it.");
+        setStatus("Image "+(id+1)+" armed ✓ · all image blocks are highlighted. Tap any block to place it.");
         injectTargets();
     }
 
@@ -302,7 +302,7 @@ public class MainActivity extends Activity {
                     armedIndex=-1;
                     setStatus("Added to "+slot+" ✓");
                     injectMediaIntoPage(slot,url);
-                    placing=false;placeButton.setText("PLACE");
+                    placing=false;placeButton.setText("PLACE IMAGE");
                     injectTargets();
                 });
             }catch(Exception e){
@@ -407,7 +407,7 @@ public class MainActivity extends Activity {
     int dp(int n){return (int)(n*getResources().getDisplayMetrics().density+.5f);}
 
     public class Bridge{
-        @JavascriptInterface public void ready(){runOnUiThread(()->{if(status!=null&&!uploading)status.setText(placing?"Targets highlighted · tap a block":"Ready · tap ADD to choose media");});}
+        @JavascriptInterface public void ready(){runOnUiThread(()->{if(status!=null&&!uploading)status.setText((placing||!selected.isEmpty())?"Image blocks highlighted · tap a block":"Ready · tap ADD IMAGE to choose media");});}
         @JavascriptInterface public void target(String slot){runOnUiThread(()->MainActivity.this.target(slot));}
     }
 }
