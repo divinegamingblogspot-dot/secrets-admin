@@ -31,7 +31,7 @@ public class MediaSyncService extends Service {
 
     @Override public int onStartCommand(Intent intent,int flags,int startId) {
         if(intent!=null && ACTION_STOP.equals(intent.getAction())){stopSync();return START_NOT_STICKY;}
-        if(!ACTION_START.equals(intent==null?ACTION_START:intent.getAction()))return START_NOT_STICKY;
+        if(intent==null || !ACTION_START.equals(intent.getAction()))return START_NOT_STICKY;
         if(isRunning||scanInFlight)return START_NOT_STICKY;
         if(Build.VERSION.SDK_INT>=26)startForeground(NOTIFY,notification("One-time Sync is running"));
         isRunning=true;
