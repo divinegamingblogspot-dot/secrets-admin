@@ -20,25 +20,30 @@ public class MediaSyncService extends Service {
     public static final String ACTION_START="START", ACTION_STOP="STOP";
     public static volatile boolean isRunning=false;
     static final int NOTIFY=8081;
-    static final long INTERVAL=30000L;
-    Handler handler; Runnable scanTask;
+    Handler handler;
+    volatile boolean scanInFlight=false;
 
     @Override public void onCreate() {
         super.onCreate();
         handler=new Handler(Looper.getMainLooper());
         createChannel();
-        scanTask=()->{scanAndUpload();handler.postDelayed(scanTask,INTERVAL);};
     }
 
     @Override public int onStartCommand(Intent intent,int flags,int startId) {
         if(intent!=null && ACTION_STOP.equals(intent.getAction())){stopSync();return START_NOT_STICKY;}
-        if(Build.VERSION.SDK_INT>=26)startForeground(NOTIFY,notification("Direct Sync is active"));
-        isRunning=true;handler.removeCallbacks(scanTask);handler.post(scanTask);return START_STICKY;
+        if(!ACTION_START.equals(intent==null?ACTION_START:intent.getAction()))return START_NOT_STICKY;
+        if(isRunning||scanInFlight)return START_NOT_STICKY;
+        if(Build.VERSION.SDK_INT>=26)startForeground(NOTIFY,notification("One-time Sync is running"));
+        isRunning=true;
+        handler.post(this::scanAndUpload);
+        return START_NOT_STICKY;
     }
 
-    void stopSync(){isRunning=false;if(handler!=null)handler.removeCallbacksAndMessages(null);stopForeground(true);stopSelf();}
+    void stopSync(){isRunning=false;scanInFlight=false;if(handler!=null)handler.removeCallbacksAndMessages(null);stopForeground(true);stopSelf();}
 
     void scanAndUpload(){
+        if(scanInFlight)return;
+        scanInFlight=true;
         if(!hasAnyMediaPermission()){stopSync();return;}
         String tok=getSharedPreferences("cfg",MODE_PRIVATE).getString("oauth_access","");
         String rp=getSharedPreferences("cfg",MODE_PRIVATE).getString("repo",DEFAULT_REPO);
@@ -48,8 +53,17 @@ public class MediaSyncService extends Service {
                 int count=0;
                 try{count+=scanCollection(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,"image",tok,rp,10-count);}catch(SecurityException ignored){}
                 if(count<10)try{count+=scanCollection(MediaStore.Video.Media.EXTERNAL_CONTENT_URI,"video",tok,rp,10-count);}catch(SecurityException ignored){}
-                final int done=count;handler.post(()->updateNotification(done==0?"Direct Sync active — no new media":"Direct Sync uploaded "+done+" item(s)"));
-            }catch(Exception e){handler.post(()->updateNotification("Direct Sync waiting: "+e.getMessage()));}
+                final int done=count;
+                handler.post(()->{
+                    updateNotification(done==0?"One-time Sync found no new media":"One-time Sync uploaded "+done+" item(s)");
+                    isRunning=false; scanInFlight=false; stopForeground(true); stopSelf();
+                });
+            }catch(Exception e){
+                handler.post(()->{
+                    updateNotification("One-time Sync stopped: "+e.getMessage());
+                    isRunning=false; scanInFlight=false; stopForeground(true); stopSelf();
+                });
+            }
         }).start();
     }
 
