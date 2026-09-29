@@ -153,8 +153,10 @@ public class MainActivity extends Activity {
         if(slot==null||slot.isEmpty()){setStatus("This block has no upload slot.");return;}
         placing=true;
         placeButton.setText("CANCEL");
-        if(armedIndex>=0&&armedIndex<selected.size()){
-            uploadOne(selected.get(armedIndex),slot);
+        int useIndex=(armedIndex>=0&&armedIndex<selected.size())?armedIndex:(selected.isEmpty()?-1:0);
+        if(useIndex>=0){
+            armedIndex=useIndex;
+            uploadOne(selected.get(useIndex),slot);
             return;
         }
         pendingUploadSlot=slot;
@@ -226,6 +228,7 @@ public class MainActivity extends Activity {
             for(int i=0;i<d.getClipData().getItemCount();i++)addUri(d.getClipData().getItemAt(i).getUri());
         }else if(d.getData()!=null)addUri(d.getData());
         refreshSelectionUi();
+        if(!selected.isEmpty()) armedIndex=0;
         String slot=pendingUploadSlot;
         pendingUploadSlot="";
         if(slot!=null&&!slot.isEmpty()&&!selected.isEmpty()){
