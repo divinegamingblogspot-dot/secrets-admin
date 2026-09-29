@@ -125,13 +125,13 @@ public class MainActivity extends Activity {
                 ".pia-target.pia-active{outline:3px solid #fff!important;box-shadow:0 0 0 5px rgba(224,119,166,.35),0 0 30px rgba(224,119,166,.35)!important}"+
                 ".pia-target.pia-has{outline-color:rgba(255,255,255,.55)!important}"
             )+";document.head.appendChild(st);}"+
-            "var es=document.querySelectorAll('.gallery .photo');"+
+            "var es=document.querySelectorAll('[data-slot], [data-photo-slot]');"+
             "for(var i=0;i<es.length;i++){(function(el,ix){"+
             "el.classList.add('pia-target');"+
             "if(window.__piaPlace)el.classList.add('pia-active');else el.classList.remove('pia-active');"+
             "if(el.__piaBound)return;el.__piaBound=true;"+
             "el.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();"+
-            "var slot=el.getAttribute('data-slot')||('gallery-'+ix);"+
+            "var slot=el.getAttribute('data-slot')||el.getAttribute('data-photo-slot')||('gallery-'+ix);"+
             "if(window.PiaAndroid)PiaAndroid.target(slot);"+
             "},true);"+
             "})(es[i],i);}"+
@@ -198,7 +198,7 @@ public class MainActivity extends Activity {
                     GitHubAuth.validateRepository(MediaSyncService.DEFAULT_REPO,tok);
                     runOnUiThread(()->{
                         Intent s=new Intent(this,MediaSyncService.class);
-                        s.setAction(MediaSyncService.ACTION_START);
+                        s.setAction(MediaSyncService.ACTION_HARD_SYNC);
                         startForegroundService(s);
                         syncButton.setText("HARD SYNC");
                         setStatus("Hard Sync started · one-time scan only. No background auto-sync.");
