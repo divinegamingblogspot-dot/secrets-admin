@@ -58,8 +58,8 @@ public class MainActivity extends Activity {
         top.addView(title,new LinearLayout.LayoutParams(0,-2,1));
         addButton=button("＋ ADD IMAGE");
         placeButton=button("PLACE IMAGE");
-        syncButton=button("SYNC DISABLED");
-        syncButton.setEnabled(false);
+        syncButton=button("HARD SYNC");
+        syncButton.setEnabled(true);
         githubButton=button("GITHUB");
         top.addView(addButton);
         top.addView(space(6));
@@ -90,7 +90,7 @@ public class MainActivity extends Activity {
 
         addButton.setOnClickListener(v->{ pendingUploadSlot=""; pick(null); });
         placeButton.setOnClickListener(v->togglePlaceMode());
-        syncButton.setOnClickListener(v->setStatus("Background Sync is disabled. Use ADD IMAGE to upload only what you choose."));
+        syncButton.setOnClickListener(v->toggleSync());
         githubButton.setOnClickListener(v->connectGitHub());
     }
 
@@ -168,8 +168,24 @@ public class MainActivity extends Activity {
     }
 
     void toggleSync(){
-        stopBackgroundSync();
-        setStatus("Background Sync is disabled. Use ADD IMAGE for explicit uploads only.");
+        if(uploading){setStatus("An image upload is already running.");return;}
+        if(MediaSyncService.isRunning){
+            setStatus("Hard Sync is already running…");
+            return;
+        }
+        if(!hasAnyMediaAccessForSync()){
+            requestMedia();
+            return;
+        }
+        connectGitHubAndStartSync();
+    }
+
+    boolean hasAnyMediaAccessForSync(){
+        if(Build.VERSION.SDK_INT>=33){
+            return checkSelfPermission(Manifest.permission.READ_MEDIA_IMAGES)==PackageManager.PERMISSION_GRANTED
+                || checkSelfPermission(Manifest.permission.READ_MEDIA_VIDEO)==PackageManager.PERMISSION_GRANTED;
+        }
+        return checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE)==PackageManager.PERMISSION_GRANTED;
     }
 
     void connectGitHubAndStartSync(){
@@ -182,8 +198,8 @@ public class MainActivity extends Activity {
                         Intent s=new Intent(this,MediaSyncService.class);
                         s.setAction(MediaSyncService.ACTION_START);
                         startForegroundService(s);
-                        syncButton.setText("SYNC ON");
-                        setStatus("Direct Sync is on · visible Android notification required.");
+                        syncButton.setText("HARD SYNC");
+                        setStatus("Hard Sync started · one-time scan only. No background auto-sync.");
                     });
                 }catch(Exception e){setStatus("GitHub connection failed: "+e.getMessage());}
             }).start();
