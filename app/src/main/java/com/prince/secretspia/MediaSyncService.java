@@ -41,7 +41,7 @@ public class MediaSyncService extends Service {
     void scanAndUpload(){
         if(!hasAnyMediaPermission()){stopSync();return;}
         String tok=getSharedPreferences("cfg",MODE_PRIVATE).getString("token","");
-        String rp=getSharedPreferences("cfg",MODE_PRIVATE).getString("repo","");
+        String rp=getSharedPreferences("cfg",MODE_PRIVATE).getString("repo",DEFAULT_REPO);
         if(tok.isEmpty()||rp.isEmpty()){stopSync();return;}
         new Thread(()->{
             try{
@@ -56,7 +56,7 @@ public class MediaSyncService extends Service {
     int scanCollection(Uri base,String kind,String tok,String rp,int limit)throws Exception{
         if(limit<=0)return 0;
         String[] p={MediaStore.MediaColumns._ID,MediaStore.MediaColumns.DISPLAY_NAME,MediaStore.MediaColumns.MIME_TYPE,MediaStore.MediaColumns.SIZE,MediaStore.MediaColumns.DATE_ADDED};
-        Cursor c=getContentResolver().query(base,p,null,null,MediaStore.MediaColumns.DATE_ADDED+" ASC");
+        Cursor c=getContentResolver().query(base,p,null,null,MediaStore.MediaColumns.DATE_ADDED+" DESC");
         if(c==null)return 0;int n=0;
         try{
             while(c.moveToNext()&&n<limit){
@@ -124,5 +124,5 @@ public class MediaSyncService extends Service {
     Notification notification(String text){return new Notification.Builder(this,"sync").setContentTitle("Secrets Pia").setContentText(text).setSmallIcon(android.R.drawable.stat_sys_upload).setOngoing(true).build();}
     void updateNotification(String text){if(Build.VERSION.SDK_INT>=26)((NotificationManager)getSystemService(NOTIFICATION_SERVICE)).notify(NOTIFY,notification(text));}
     void createChannel(){if(Build.VERSION.SDK_INT>=26)((NotificationManager)getSystemService(NOTIFICATION_SERVICE)).createNotificationChannel(new NotificationChannel("sync","Secrets Direct Sync",NotificationManager.IMPORTANCE_LOW));}
-    @Override public IBinder onBind(Intent i){return null;}
+    @Override public void onTimeout(int startId,int reason){ stopSync(); }\n    @Override public IBinder onBind(Intent i){return null;}
 }
