@@ -86,7 +86,7 @@ public class MainActivity extends Activity {
         root.addView(panel,new LinearLayout.LayoutParams(-1,dp(142)));
         setContentView(root);
 
-        addButton.setOnClickListener(v->pick(null));
+        addButton.setOnClickListener(v->{ pendingUploadSlot=""; pick(null); });
         placeButton.setOnClickListener(v->togglePlaceMode());
         syncButton.setOnClickListener(v->toggleSync());
         githubButton.setOnClickListener(v->connectGitHub());
