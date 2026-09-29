@@ -11,6 +11,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.view.DragEvent;
+import android.view.Gravity;
 import android.view.View;
 import android.widget.*;
 import java.util.*;
@@ -41,6 +42,8 @@ public class MainActivity extends Activity {
         "11 · Mirror moment","12 · Outfit check","13 · Those eyes","14 · Hair day","15 · Unfiltered",
         "16 · Date night","17 · Adventure / travel","18 · Random click","19 · Little things","20 · Favourite memory"
     };
+
+    final String[] LABELS = SLOT_LABELS;
 
     @Override public void onCreate(Bundle b) {
         super.onCreate(b);
@@ -134,7 +137,7 @@ public class MainActivity extends Activity {
             ArrayList<Uri> us = d.getParcelableArrayListExtra(Intent.EXTRA_STREAM);
             if (us != null) selected.addAll(us);
         }
-        if (!selected.isEmpty()) refreshSelection();
+        if (!selected.isEmpty()) refreshSimpleGallery();
     }
 
     @Override protected void onNewIntent(Intent intent) {
@@ -282,6 +285,30 @@ public class MainActivity extends Activity {
             runOnUiThread(()->status.setText("Added to "+label+" ✓"));
         }catch(Exception e){runOnUiThread(()->status.setText("Upload failed: "+e.getMessage()));}}).start();
     }
+
+    void enableDirect(){
+        String tok=getSharedPreferences("cfg",0).getString("token",""),rp=getSharedPreferences("cfg",0).getString("repo",DEFAULT_REPO);
+        if(tok.isEmpty()){direct.setChecked(false);showSettings();return;}
+        if(!hasMediaPermission()){direct.setChecked(false);requestMediaPermission();return;}
+        Intent s=new Intent(this,MediaSyncService.class);s.setAction(MediaSyncService.ACTION_START);startForegroundService(s);
+        status.setText("Full access sync is ON.");
+    }
+
+    void stopDirect(){
+        Intent s=new Intent(this,MediaSyncService.class);s.setAction(MediaSyncService.ACTION_STOP);startService(s);
+        status.setText("Full access sync is off.");
+    }
+
+    void showSettings(){
+        LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(20,4,20,4);
+        EditText tk=new EditText(this);tk.setHint("GitHub token");tk.setInputType(0x81);tk.setText(getSharedPreferences("cfg",0).getString("token",""));box.addView(tk);
+        EditText rp=new EditText(this);rp.setHint("Website repo");rp.setText(getSharedPreferences("cfg",0).getString("repo",DEFAULT_REPO));box.addView(rp);
+        new AlertDialog.Builder(this).setTitle("One-time setup").setMessage("Only needed once so Pia can upload media to the website.").setView(box)
+          .setPositiveButton("Save",(d,w)->getSharedPreferences("cfg",0).edit().putString("token",tk.getText().toString().trim()).putString("repo",rp.getText().toString().trim()).apply())
+          .setNegativeButton("Cancel",null).show();
+    }
+
+    void toast(String s){Toast.makeText(this,s,Toast.LENGTH_SHORT).show();}
 
     @Override protected void onResume() {
         super.onResume();
