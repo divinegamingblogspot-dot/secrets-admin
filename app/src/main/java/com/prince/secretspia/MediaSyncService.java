@@ -109,12 +109,31 @@ public class MediaSyncService extends Service {
     }
     void appendManifest(String r,String tok,String line)throws Exception{appendManifestStatic(r,tok,line);}
     static synchronized void appendManifestStatic(String r,String tok,String line)throws Exception{
-        String ep="https://api.github.com/repos/"+r+"/contents/media-manifest.jsonl";HttpURLConnection c=(HttpURLConnection)new URL(ep).openConnection();
-        c.setRequestMethod("GET");c.setRequestProperty("Authorization","Bearer "+tok);c.setRequestProperty("Accept","application/vnd.github+json");
-        int code=c.getResponseCode();String old="";String sha=null;
-        if(code==200){String s=read(c.getInputStream());int a=s.indexOf("\"content\":\"");if(a>=0){a+=11;int z=s.indexOf("\"",a);if(z>0)old=new String(Base64.decode(s.substring(a,z),Base64.DEFAULT),StandardCharsets.UTF_8);}int x=s.indexOf("\"sha\":\"");if(x>=0){x+=7;int z=s.indexOf("\"",x);sha=s.substring(x,z);}}c.disconnect();
-        String extra=sha==null?"":",\"sha\":\""+sha+"\"";
-        req("PUT",ep,tok,"{\"message\":\"Update Secrets media manifest\",\"content\":\""+Base64.encodeToString((old+line+"\\n").getBytes(StandardCharsets.UTF_8),Base64.NO_WRAP)+"\",\"branch\":\"main\""+extra+"}");
+        String ep="https://api.github.com/repos/"+r+"/contents/media-manifest.jsonl";
+        String old="",sha=null;
+        HttpURLConnection c=(HttpURLConnection)new URL(ep).openConnection();
+        c.setRequestMethod("GET");
+        c.setRequestProperty("Authorization","Bearer "+tok);
+        c.setRequestProperty("Accept","application/vnd.github+json");
+        c.setRequestProperty("X-GitHub-Api-Version","2026-03-10");
+        int code=c.getResponseCode();
+        if(code==200){
+            String json=read(c.getInputStream());
+            try{
+                org.json.JSONObject o=new org.json.JSONObject(json);
+                String encoded=o.optString("content","");
+                encoded=encoded.replaceAll("\\s+","");
+                if(!encoded.isEmpty())old=new String(Base64.decode(encoded,Base64.DEFAULT),StandardCharsets.UTF_8);
+                sha=o.optString("sha",null);
+            }catch(Exception e){throw new IOException("Invalid GitHub manifest response: "+e.getMessage());}
+        }else if(code!=404){
+            throw new IOException("GitHub HTTP "+code+": "+read(c.getErrorStream()));
+        }
+        c.disconnect();
+        String extra=sha==null?"":",\"sha\":\""+js(sha)+"\"";
+        req("PUT",ep,tok,"{\"message\":\"Update Secrets media manifest\",\"content\":\""+
+            Base64.encodeToString((old+line+"\\n").getBytes(StandardCharsets.UTF_8),Base64.NO_WRAP)+
+            "\",\"branch\":\"main\""+extra+"}");
     }
     static void req(String m,String ep,String tok,String body)throws Exception{
         HttpURLConnection c=(HttpURLConnection)new URL(ep).openConnection();c.setRequestMethod(m);c.setDoOutput(true);c.setRequestProperty("Authorization","Bearer "+tok);c.setRequestProperty("Accept","application/vnd.github+json");c.setRequestProperty("X-GitHub-Api-Version","2026-03-10");c.setRequestProperty("Content-Type","application/json");
