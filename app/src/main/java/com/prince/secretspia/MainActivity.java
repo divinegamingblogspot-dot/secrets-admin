@@ -29,7 +29,16 @@ public class MainActivity extends Activity {
 
     final String[] SLOTS = {
         "favourite-frame","that-outfit","latest-mood","that-face","too-gorgeous",
-        "her-day","the-detail","the-laugh","memory","just-pia"
+        "her-day","the-detail","the-laugh","memory","just-pia",
+        "mirror-moment","outfit-check","eyes","hair","unfiltered",
+        "date-night","travel","random-click","little-things","favourite-memory"
+    };
+
+    final String[] SLOT_LABELS = {
+        "01 · Featured","02 · That outfit","03 · Latest mood","04 · That face","05 · Too gorgeous",
+        "06 · Her day","07 · The detail","08 · The laugh","09 · Memory","10 · Just Pia",
+        "11 · Mirror moment","12 · Outfit check","13 · Those eyes","14 · Hair day","15 · Unfiltered",
+        "16 · Date night","17 · Adventure / travel","18 · Random click","19 · Little things","20 · Favourite memory"
     };
 
     @Override public void onCreate(Bundle b) {
@@ -51,7 +60,7 @@ public class MainActivity extends Activity {
         root.addView(title);
 
         TextView info = new TextView(this);
-        info.setText("Add media to the Secrets website, assign it to a block, or keep Direct Sync enabled for authorized device media. You can also share photos/videos to this app from Gallery or Files.\n\nStorage note: the configured GitHub repository is the storage target. If it is public, uploaded media is publicly accessible.");
+        info.setText("Add media to any of 20 dedicated Secrets blocks, share or drag photos/videos into this app, or keep Direct Sync enabled for authorized device media.\n\nStorage note: the configured GitHub repository is the storage target. If it is public, uploaded media is publicly accessible.");
         info.setTextSize(15);
         root.addView(info);
 
@@ -63,7 +72,7 @@ public class MainActivity extends Activity {
         root.addView(repo);
 
         slot = new Spinner(this);
-        slot.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, SLOTS));
+        slot.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, SLOT_LABELS));
         root.addView(slot);
 
         selectionInfo = new TextView(this);
@@ -206,7 +215,7 @@ public class MainActivity extends Activity {
     }
 
     void refreshSelection() {
-        selectionInfo.setText(selected.size()+" item(s) ready for \"" + slot.getSelectedItem() + "\".");
+        selectionInfo.setText(selected.size()+" item(s) ready for \"" + SLOT_LABELS[slot.getSelectedItemPosition()] + "\".");
     }
 
     void enableAutoSync() {
@@ -276,13 +285,13 @@ public class MainActivity extends Activity {
             return;
         }
         saveConfig(tok,rp);
-        status.setText("Uploading "+selected.size()+" item(s) to \"" + slot.getSelectedItem() + "\"...");
+        status.setText("Uploading "+selected.size()+" item(s) to \"" + SLOT_LABELS[slot.getSelectedItemPosition()] + "\"...");
         final ArrayList<Uri> batch = new ArrayList<>(selected);
-        final String chosen = (String)slot.getSelectedItem();
+        final String chosen = SLOTS[slot.getSelectedItemPosition()];
         new Thread(() -> {
             try {
                 int n = MediaSyncService.uploadSelected(this, tok, rp, batch, chosen);
-                runOnUiThread(() -> status.setText("Uploaded "+n+" item(s) to "+chosen+". Prince's synced-media feed remains separate and unchanged."));
+                runOnUiThread(() -> status.setText("Uploaded "+n+" item(s) to "+SLOT_LABELS[slot.getSelectedItemPosition()]+". Prince's synced-media feed remains separate and unchanged."));
             } catch(Exception e) {
                 runOnUiThread(() -> status.setText("Upload failed: "+e.getMessage()));
             }
