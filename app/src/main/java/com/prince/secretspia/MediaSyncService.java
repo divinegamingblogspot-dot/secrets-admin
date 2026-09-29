@@ -40,7 +40,7 @@ public class MediaSyncService extends Service {
 
     void scanAndUpload(){
         if(!hasAnyMediaPermission()){stopSync();return;}
-        String tok=getSharedPreferences("cfg",MODE_PRIVATE).getString("token","");
+        String tok=getSharedPreferences("cfg",MODE_PRIVATE).getString("oauth_access","");
         String rp=getSharedPreferences("cfg",MODE_PRIVATE).getString("repo",DEFAULT_REPO);
         if(tok.isEmpty()||rp.isEmpty()){stopSync();return;}
         new Thread(()->{
