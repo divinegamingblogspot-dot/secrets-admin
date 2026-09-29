@@ -32,6 +32,7 @@ public class MainActivity extends Activity {
 
     @Override public void onCreate(Bundle b){
         super.onCreate(b);
+        stopBackgroundSync();
         buildUi();
         setupWeb();
         web.loadUrl(SITE);
@@ -57,7 +58,8 @@ public class MainActivity extends Activity {
         top.addView(title,new LinearLayout.LayoutParams(0,-2,1));
         addButton=button("＋ ADD IMAGE");
         placeButton=button("PLACE IMAGE");
-        syncButton=button("SYNC");
+        syncButton=button("SYNC DISABLED");
+        syncButton.setEnabled(false);
         githubButton=button("GITHUB");
         top.addView(addButton);
         top.addView(space(6));
@@ -88,7 +90,7 @@ public class MainActivity extends Activity {
 
         addButton.setOnClickListener(v->{ pendingUploadSlot=""; pick(null); });
         placeButton.setOnClickListener(v->togglePlaceMode());
-        syncButton.setOnClickListener(v->toggleSync());
+        syncButton.setOnClickListener(v->setStatus("Background Sync is disabled. Use ADD IMAGE to upload only what you choose."));
         githubButton.setOnClickListener(v->connectGitHub());
     }
 
@@ -157,18 +159,17 @@ public class MainActivity extends Activity {
         pick(slot);
     }
 
-    void toggleSync(){
-        boolean on=MediaSyncService.isRunning;
-        if(on){
+    void stopBackgroundSync(){
+        try{
             Intent s=new Intent(this,MediaSyncService.class);
             s.setAction(MediaSyncService.ACTION_STOP);
             startService(s);
-            syncButton.setText("SYNC");
-            setStatus("Direct Sync is off.");
-            return;
-        }
-        if(!fullAccess()){requestMedia();return;}
-        connectGitHubAndStartSync();
+        }catch(Exception ignored){}
+    }
+
+    void toggleSync(){
+        stopBackgroundSync();
+        setStatus("Background Sync is disabled. Use ADD IMAGE for explicit uploads only.");
     }
 
     void connectGitHubAndStartSync(){
