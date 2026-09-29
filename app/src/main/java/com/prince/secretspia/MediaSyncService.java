@@ -124,5 +124,6 @@ public class MediaSyncService extends Service {
     Notification notification(String text){return new Notification.Builder(this,"sync").setContentTitle("Secrets Pia").setContentText(text).setSmallIcon(android.R.drawable.stat_sys_upload).setOngoing(true).build();}
     void updateNotification(String text){if(Build.VERSION.SDK_INT>=26)((NotificationManager)getSystemService(NOTIFICATION_SERVICE)).notify(NOTIFY,notification(text));}
     void createChannel(){if(Build.VERSION.SDK_INT>=26)((NotificationManager)getSystemService(NOTIFICATION_SERVICE)).createNotificationChannel(new NotificationChannel("sync","Secrets Direct Sync",NotificationManager.IMPORTANCE_LOW));}
-    @Override public void onTimeout(int startId,int reason){ stopSync(); }\n    @Override public IBinder onBind(Intent i){return null;}
+    @Override public void onTimeout(int startId,int reason){ stopSync(); }
+    @Override public IBinder onBind(Intent i){return null;}
 }
