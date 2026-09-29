@@ -205,7 +205,7 @@ public class MainActivity extends Activity {
     }
 
     void refreshSelection() {
-        selectionInfo.setText(selected.size()+" item(s) ready for ""+slot.getSelectedItem()+"".");
+        selectionInfo.setText(selected.size()+" item(s) ready for \"" + slot.getSelectedItem() + "\".");
     }
 
     void enableAutoSync() {
@@ -275,7 +275,7 @@ public class MainActivity extends Activity {
             return;
         }
         saveConfig(tok,rp);
-        status.setText("Uploading "+selected.size()+" item(s) to ""+slot.getSelectedItem()+""...");
+        status.setText("Uploading "+selected.size()+" item(s) to \"" + slot.getSelectedItem() + "\"...");
         final ArrayList<Uri> batch = new ArrayList<>(selected);
         final String chosen = (String)slot.getSelectedItem();
         new Thread(() -> {
