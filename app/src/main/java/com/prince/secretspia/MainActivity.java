@@ -337,13 +337,11 @@ public class MainActivity extends Activity {
     void injectMediaIntoPage(String slot,String url){
         if(url==null||slot==null||slot.isEmpty())return;
         String js="(function(){"+
-            "var e=null,all=document.querySelectorAll('[data-slot],[data-photo-slot]');"+
-            "for(var i=0;i<all.length;i++){var s=all[i].getAttribute('data-slot')||all[i].getAttribute('data-photo-slot');if(s==="+q(slot)+"){e=all[i];break;}}"+
+            "var wanted="+q(slot)+",u="+q(url)+",e=null,all=document.querySelectorAll('[data-slot],[data-photo-slot]');"+
+            "for(var i=0;i<all.length;i++){var s=all[i].getAttribute('data-slot')||all[i].getAttribute('data-photo-slot');if(s===wanted){e=all[i];break;}}"+
             "if(e){var t=e.hasAttribute('data-photo-slot')?e.querySelector('.block-photo'):e;if(t){"+
-            "t.style.backgroundImage='linear-gradient(180deg,rgba(0,0,0,.05),rgba(0,0,0,.72)),url('+"
-            q(url)+")';"+
-            "t.style.backgroundSize='cover';t.style.backgroundPosition='center';"+
-            "e.classList.add('has-pia-media');}}})()";
+            "t.style.backgroundImage=\"linear-gradient(180deg,rgba(0,0,0,.05),rgba(0,0,0,.72)),url('\"+u+\"')\";"+
+            "t.style.backgroundSize='cover';t.style.backgroundPosition='center';e.classList.add('has-pia-media');}}})()";
         web.evaluateJavascript(js,null);
         setStatus("Uploaded ✓ · refreshing Pia website from GitHub…");
         main.postDelayed(()->{if(web!=null)web.reload();},1800);
