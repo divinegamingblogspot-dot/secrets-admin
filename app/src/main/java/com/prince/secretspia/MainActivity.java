@@ -47,117 +47,52 @@ public class MainActivity extends Activity {
     }
 
     void buildUi() {
-        root = new LinearLayout(this);
+        ScrollView scroll=new ScrollView(this);
+        LinearLayout root=new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(28,28,28,28);
-        root.setBackgroundColor(Color.rgb(255,248,252));
+        root.setPadding(22,24,22,40);
+        root.setBackgroundColor(Color.rgb(9,7,11));
 
-        TextView title = new TextView(this);
-        title.setText("Secrets Pia");
-        title.setTextSize(28);
-        title.setTextColor(Color.rgb(210,40,100));
-        root.addView(title);
+        LinearLayout top=new LinearLayout(this);
+        top.setGravity(Gravity.CENTER_VERTICAL);
+        TextView brand=t("Pia",28,Color.WHITE);
+        top.addView(brand,new LinearLayout.LayoutParams(0,70,1));
+        Button gear=new Button(this); gear.setText("⚙"); gear.setOnClickListener(v->showSettings());
+        top.addView(gear);
+        root.addView(top);
 
-        TextView info = new TextView(this);
-        info.setText("Add media to any of 20 dedicated Secrets blocks, share or drag photos/videos into this app, or keep Direct Sync enabled for authorized device media.\n\nStorage note: the configured GitHub repository is the storage target. If it is public, uploaded media is publicly accessible.");
-        info.setTextSize(15);
-        root.addView(info);
+        TextView kicker=t("HER UNIVERSE · MEDIA",11,Color.rgb(220,170,205)); root.addView(kicker);
+        TextView title=t("Add a moment.\\nGive it its own spotlight.",29,Color.WHITE);
+        title.setTypeface(null,1); title.setPadding(0,8,0,8); root.addView(title);
+        root.addView(t("Choose from Gallery, then drag a thumbnail onto any block.",15,Color.LTGRAY));
 
-        token = f("GitHub fine-grained token — Contents: write", true);
-        root.addView(token);
-
-        repo = f("Website repository", false);
-        repo.setText(DEFAULT_REPO);
-        root.addView(repo);
-
-        slot = new Spinner(this);
-        slot.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, SLOT_LABELS));
-        root.addView(slot);
-
-        selectionInfo = new TextView(this);
-        selectionInfo.setText("No media selected.");
-        selectionInfo.setPadding(0,14,0,8);
-        root.addView(selectionInfo);
-
-        Button add = new Button(this);
-        add.setText("＋ Add photos / videos to website");
-        add.setOnClickListener(v -> pick());
-        root.addView(add);
-
-        Button shareHelp = new Button(this);
-        shareHelp.setText("Share / drag media into Secrets Pia");
-        shareHelp.setOnClickListener(v -> showDropHelp());
-        root.addView(shareHelp);
-
-        Button sync = new Button(this);
-        sync.setText("Upload selected to this block");
-        sync.setOnClickListener(v -> syncSelected());
+        LinearLayout sync=new LinearLayout(this); sync.setGravity(Gravity.CENTER_VERTICAL); sync.setPadding(16,16,12,16);
+        sync.setBackgroundColor(Color.rgb(28,20,29));
+        LinearLayout st=new LinearLayout(this); st.setOrientation(LinearLayout.VERTICAL);
+        st.addView(t("Full access sync",17,Color.WHITE));
+        st.addView(t("Automatically sync new photos & videos you allow.",12,Color.LTGRAY));
+        sync.addView(st,new LinearLayout.LayoutParams(0,-2,1));
+        direct=new Switch(this); direct.setChecked(MediaSyncService.isRunning);
+        direct.setOnCheckedChangeListener((v,on)->{if(on)enableDirect();else stopDirect();});
+        sync.addView(direct);
         root.addView(sync);
 
-        Button clear = new Button(this);
-        clear.setText("Clear selection");
-        clear.setOnClickListener(v -> {
-            selected.clear();
-            refreshSelection();
-        });
-        root.addView(clear);
+        Button allow=new Button(this); allow.setText("Allow full media access"); allow.setAllCaps(false);
+        allow.setOnClickListener(v->{if(!hasMediaPermission())requestMediaPermission();else toast("Full media access is already allowed.");});
+        root.addView(allow);
 
-        Button scan = new Button(this);
-        scan.setText("Sync new device media now");
-        scan.setOnClickListener(v -> {
-            if (!hasMediaPermission()) {
-                requestMediaPermission();
-                return;
-            }
-            startDirectSync();
-            status.setText("Sync requested. New authorized device media will be queued.");
-        });
-        root.addView(scan);
+        TextView gt=t("YOUR GALLERY",12,Color.rgb(225,170,205)); gt.setPadding(0,22,0,8); root.addView(gt);
+        Button pick=new Button(this); pick.setText("＋ Choose photos / videos"); pick.setAllCaps(false); pick.setOnClickListener(v->pick()); root.addView(pick);
 
-        auto = new Switch(this);
-        auto.setText("Direct Sync — automatically sync new device media");
-        auto.setTextSize(16);
-        auto.setOnCheckedChangeListener((v, on) -> {
-            if (on) enableAutoSync();
-            else stopAutoSync();
-        });
-        root.addView(auto);
+        HorizontalScrollView hs=new HorizontalScrollView(this);
+        mediaStrip=new LinearLayout(this); mediaStrip.setPadding(0,10,0,6); hs.addView(mediaStrip); root.addView(hs);
 
-        Button site = new Button(this);
-        site.setText("Open Secrets website");
-        site.setOnClickListener(v -> {
-            Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse("https://divinegamingblogspot-dot.github.io/secret/"));
-            startActivity(i);
-        });
-        root.addView(site);
+        TextView bt=t("DRAG INTO A BLOCK",12,Color.rgb(225,170,205)); bt.setPadding(0,22,0,8); root.addView(bt);
+        blockList=new LinearLayout(this); blockList.setOrientation(LinearLayout.VERTICAL); root.addView(blockList);
+        for(int i=0;i<SLOTS.length;i++) addSimpleBlock(i);
 
-        Button settings = new Button(this);
-        settings.setText("Open app media permissions");
-        settings.setOnClickListener(v -> startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                Uri.parse("package:" + getPackageName()))));
-        root.addView(settings);
-
-        status = new TextView(this);
-        status.setText("Direct Sync is off.");
-        status.setPadding(0,18,0,0);
-        root.addView(status);
-
-        root.setOnDragListener((v, event) -> {
-            if (event.getAction() == DragEvent.ACTION_DROP) {
-                ClipData cd = event.getClipData();
-                if (cd != null) {
-                    for (int i=0;i<cd.getItemCount();i++) {
-                        Uri u = cd.getItemAt(i).getUri();
-                        if (u != null && !selected.contains(u)) selected.add(u);
-                    }
-                    refreshSelection();
-                    return true;
-                }
-            }
-            return true;
-        });
-
-        setContentView(root);
+        status=t("Nothing selected yet.",13,Color.LTGRAY); status.setPadding(0,18,0,0); root.addView(status);
+        scroll.addView(root); setContentView(scroll);
     }
 
     EditText f(String h, boolean pw) {
@@ -295,6 +230,52 @@ public class MainActivity extends Activity {
                 runOnUiThread(() -> status.setText("Upload failed: "+e.getMessage()));
             }
         }).start();
+    }
+
+    TextView t(String s,float z,int color){TextView v=new TextView(this);v.setText(s);v.setTextSize(z);v.setTextColor(color);return v;}
+
+    void addSimpleBlock(final int index){
+        LinearLayout card=new LinearLayout(this); card.setGravity(Gravity.CENTER_VERTICAL); card.setPadding(16,14,10,14);
+        card.setBackgroundColor(Color.rgb(24,18,25));
+        LinearLayout copy=new LinearLayout(this); copy.setOrientation(LinearLayout.VERTICAL);
+        TextView name=t(String.format("%02d  %s",index+1,LABELS[index]),16,Color.WHITE); name.setTypeface(null,1);
+        copy.addView(name); copy.addView(t("Drop photo / video here",12,Color.GRAY));
+        card.addView(copy,new LinearLayout.LayoutParams(0,74,1));
+        TextView plus=t("＋",28,Color.rgb(220,70,130)); plus.setGravity(Gravity.CENTER); card.addView(plus,new LinearLayout.LayoutParams(60,74));
+        View.OnDragListener dl=(v,e)->{
+            if(e.getAction()==DragEvent.ACTION_DRAG_STARTED)return true;
+            if(e.getAction()==DragEvent.ACTION_DROP){
+                ClipData cd=e.getClipData();
+                if(cd!=null)for(int j=0;j<cd.getItemCount();j++){Uri u=cd.getItemAt(j).getUri();if(u!=null)uploadOneSimple(u,SLOTS[index],LABELS[index]);}
+                return true;
+            }
+            return true;
+        };
+        card.setOnDragListener(dl); plus.setOnDragListener(dl);
+        card.setOnClickListener(v->{if(selected.isEmpty())pick();else for(Uri u:selected)uploadOneSimple(u,SLOTS[index],LABELS[index]);});
+        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.setMargins(0,0,0,10);blockList.addView(card,p);
+    }
+
+    void refreshSimpleGallery(){
+        if(mediaStrip==null)return; mediaStrip.removeAllViews();
+        for(Uri u:selected){
+            ImageView iv=new ImageView(this); iv.setImageURI(u); iv.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            iv.setLayoutParams(new LinearLayout.LayoutParams(130,130)); iv.setPadding(2,2,12,2);
+            iv.setOnLongClickListener(v->{ClipData cd=ClipData.newUri(getContentResolver(),"media",u);v.startDragAndDrop(cd,new View.DragShadowBuilder(v),null,View.DRAG_FLAG_GLOBAL|View.DRAG_FLAG_GLOBAL_URI_READ);return true;});
+            mediaStrip.addView(iv);
+        }
+        status.setText(selected.size()+" selected · long-press a thumbnail and drag it to a block.");
+    }
+
+    void uploadOneSimple(Uri u,String slotId,String label){
+        String tok=getSharedPreferences("cfg",0).getString("token",""),rp=getSharedPreferences("cfg",0).getString("repo",DEFAULT_REPO);
+        if(tok.isEmpty()){showSettings();return;}
+        status.setText("Adding to "+label+"…");
+        new Thread(()->{try{
+            ArrayList<Uri> one=new ArrayList<>(); one.add(u);
+            MediaSyncService.uploadSelected(this,tok,rp,one,slotId);
+            runOnUiThread(()->status.setText("Added to "+label+" ✓"));
+        }catch(Exception e){runOnUiThread(()->status.setText("Upload failed: "+e.getMessage()));}}).start();
     }
 
     @Override protected void onResume() {
