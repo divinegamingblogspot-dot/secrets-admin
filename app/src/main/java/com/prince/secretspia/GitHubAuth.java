@@ -17,7 +17,7 @@ public final class GitHubAuth {
      * Replace it once with the Client ID of the GitHub OAuth App registered
      * for Secrets Pia. The app never asks the user to paste a token.
      */
-    public static final String CLIENT_ID="REPLACE_WITH_GITHUB_OAUTH_CLIENT_ID";
+    public static final String CLIENT_ID="Ov23lie66cGFs0OvAUCF";
     static final String SCOPE="public_repo offline_access";
     static final String PREF="cfg";
     static final String ACCESS="oauth_access";
