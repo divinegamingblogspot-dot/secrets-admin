@@ -24,7 +24,8 @@ public class MainActivity extends Activity {
     Spinner slot;
     Switch auto;
     TextView status, selectionInfo;
-    LinearLayout root;\n    LinearLayout mediaStrip, blockList;
+    LinearLayout root;
+    LinearLayout mediaStrip, blockList;
     ArrayList<Uri> selected = new ArrayList<>();
 
     final String[] SLOTS = {
@@ -43,7 +44,11 @@ public class MainActivity extends Activity {
 
     @Override public void onCreate(Bundle b) {
         super.onCreate(b);
-        token=new EditText(this); repo=new EditText(this);\n        token.setText(getSharedPreferences("cfg",0).getString("token",""));\n        repo.setText(getSharedPreferences("cfg",0).getString("repo",DEFAULT_REPO));\n        buildUi();\n        handleIncomingIntent(getIntent());
+        token=new EditText(this); repo=new EditText(this);
+        token.setText(getSharedPreferences("cfg",0).getString("token",""));
+        repo.setText(getSharedPreferences("cfg",0).getString("repo",DEFAULT_REPO));
+        buildUi();
+        handleIncomingIntent(getIntent());
     }
 
     void buildUi() {
