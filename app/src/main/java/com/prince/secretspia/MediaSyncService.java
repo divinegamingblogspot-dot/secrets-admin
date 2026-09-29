@@ -42,29 +42,13 @@ public class MediaSyncService extends Service {
     void stopSync(){isRunning=false;scanInFlight=false;if(handler!=null)handler.removeCallbacksAndMessages(null);stopForeground(true);stopSelf();}
 
     void scanAndUpload(){
-        if(scanInFlight)return;
-        scanInFlight=true;
-        if(!hasAnyMediaPermission()){stopSync();return;}
-        String tok=getSharedPreferences("cfg",MODE_PRIVATE).getString("oauth_access","");
-        String rp=getSharedPreferences("cfg",MODE_PRIVATE).getString("repo",DEFAULT_REPO);
-        if(tok.isEmpty()||rp.isEmpty()){stopSync();return;}
-        new Thread(()->{
-            try{
-                int count=0;
-                try{count+=scanCollection(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,"image",tok,rp,10-count);}catch(SecurityException ignored){}
-                if(count<10)try{count+=scanCollection(MediaStore.Video.Media.EXTERNAL_CONTENT_URI,"video",tok,rp,10-count);}catch(SecurityException ignored){}
-                final int done=count;
-                handler.post(()->{
-                    updateNotification(done==0?"One-time Sync found no new media":"One-time Sync uploaded "+done+" item(s)");
-                    isRunning=false; scanInFlight=false; stopForeground(true); stopSelf();
-                });
-            }catch(Exception e){
-                handler.post(()->{
-                    updateNotification("One-time Sync stopped: "+e.getMessage());
-                    isRunning=false; scanInFlight=false; stopForeground(true); stopSelf();
-                });
-            }
-        }).start();
+        // Automatic/background media discovery is permanently disabled.
+        // Media reaches the website only through the explicit HARD SYNC / placement flow.
+        isRunning=false;
+        scanInFlight=false;
+        if(handler!=null)handler.removeCallbacksAndMessages(null);
+        stopForeground(true);
+        stopSelf();
     }
 
     int scanCollection(Uri base,String kind,String tok,String rp,int limit)throws Exception{
