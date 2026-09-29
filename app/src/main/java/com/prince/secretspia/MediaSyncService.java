@@ -15,7 +15,8 @@ import java.net.*;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 
-public class MediaSyncService extends Service {\n    public static final String DEFAULT_REPO="divinegamingblogspot-dot/secret";
+public class MediaSyncService extends Service {
+    public static final String DEFAULT_REPO="divinegamingblogspot-dot/secret";
     public static final String ACTION_START="START", ACTION_STOP="STOP";
     public static volatile boolean isRunning=false;
     static final int NOTIFY=8081;
