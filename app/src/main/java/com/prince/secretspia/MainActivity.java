@@ -336,11 +336,12 @@ public class MainActivity extends Activity {
 
     void injectMediaIntoPage(String slot,String url){
         if(url==null||slot==null||slot.isEmpty())return;
-        String js="(function(){var e=document.querySelector('[data-slot='+"
-            +q(slot)+"]')||document.querySelector('[data-photo-slot='+q(slot)+"]');"+
-            "if(e){var t=e.dataset.photoSlot?e.querySelector('.block-photo'):e;if(t){"+
-            "t.style.backgroundImage='linear-gradient(180deg,rgba(0,0,0,.05),rgba(0,0,0,.72)),url(\\'"+
-            url.replace("\\","\\\\").replace("'","%27")+"\\')';"+
+        String js="(function(){"+
+            "var e=null,all=document.querySelectorAll('[data-slot],[data-photo-slot]');"+
+            "for(var i=0;i<all.length;i++){var s=all[i].getAttribute('data-slot')||all[i].getAttribute('data-photo-slot');if(s==="+q(slot)+"){e=all[i];break;}}"+
+            "if(e){var t=e.hasAttribute('data-photo-slot')?e.querySelector('.block-photo'):e;if(t){"+
+            "t.style.backgroundImage='linear-gradient(180deg,rgba(0,0,0,.05),rgba(0,0,0,.72)),url('+"
+            q(url)+")';"+
             "t.style.backgroundSize='cover';t.style.backgroundPosition='center';"+
             "e.classList.add('has-pia-media');}}})()";
         web.evaluateJavascript(js,null);
