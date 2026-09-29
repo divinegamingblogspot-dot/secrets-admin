@@ -107,22 +107,42 @@ public class MediaSyncService extends Service {
         if(s.endsWith(".git"))s=s.substring(0,s.length()-4);
         return s;
     }
+    static String cleanToken(String s){
+        if(s==null)return "";
+        s=s.trim();
+        if(s.regionMatches(true,0,"Bearer ",0,7))s=s.substring(7).trim();
+        else if(s.regionMatches(true,0,"token ",0,6))s=s.substring(6).trim();
+        return s.replaceAll("\\s+","");
+    }
+    static void validateAccess(String r,String tok)throws Exception{
+        String repo=normalizeRepo(r), token=cleanToken(tok);
+        if(repo.isEmpty()||!repo.contains("/"))throw new IOException("Enter the GitHub repo as owner/repository.");
+        if(token.isEmpty())throw new IOException("Enter a GitHub Personal Access Token.");
+        HttpURLConnection c=(HttpURLConnection)new URL("https://api.github.com/repos/"+repo).openConnection();
+        c.setRequestMethod("GET");c.setRequestProperty("Authorization","Bearer "+token);c.setRequestProperty("Accept","application/vnd.github+json");c.setRequestProperty("X-GitHub-Api-Version","2026-03-10");
+        int z=c.getResponseCode();String body=read(z>=200&&z<300?c.getInputStream():c.getErrorStream());c.disconnect();
+        if(z==401)throw new IOException("GitHub rejected this token (401). Create a new Personal Access Token and paste only the token value.");
+        if(z==403)throw new IOException("GitHub token works, but it does not have access to this repository.");
+        if(z==404)throw new IOException("Repository not found or this token cannot access it.");
+        if(z<200||z>=300)throw new IOException("GitHub HTTP "+z+": "+body);
+        try{org.json.JSONObject o=new org.json.JSONObject(body);org.json.JSONObject p=o.optJSONObject("permissions");if(p!=null&&!p.optBoolean("push",false))throw new IOException("Token can read this repository but does not have Contents write permission.");}catch(org.json.JSONException ignored){}
+    }
     static String extension(String name,String mime){int x=name.lastIndexOf('.');if(x>=0)return name.substring(x);if(mime!=null&&mime.contains("png"))return ".png";if(mime!=null&&mime.contains("webp"))return ".webp";if(mime!=null&&mime.contains("mp4"))return ".mp4";if(mime!=null&&mime.contains("quicktime"))return ".mov";return ".bin";}
     static String js(String s){return s==null?"":s.replace("\\","\\\\").replace("\"","\\\"").replace("\n"," ");}
 
     void put(String r,String p,byte[] d,String tok)throws Exception{putStatic(r,p,d,tok);}
     static void putStatic(String r,String p,byte[] d,String tok)throws Exception{
-        String repo=normalizeRepo(r); if(repo.isEmpty()||!repo.contains("/"))throw new IOException("Enter the GitHub repo as owner/repository or paste its GitHub link."); String ep="https://api.github.com/repos/"+repo+"/contents/"+p.replace(" ","%20");
+        String repo=normalizeRepo(r), token=cleanToken(tok); if(repo.isEmpty()||!repo.contains("/"))throw new IOException("Enter the GitHub repo as owner/repository or paste its GitHub link."); String ep="https://api.github.com/repos/"+repo+"/contents/"+p.replace(" ","%20");
         String body="{\"message\":\"Add Secrets media\",\"content\":\""+Base64.encodeToString(d,Base64.NO_WRAP)+"\",\"branch\":\"main\"}";
-        req("PUT",ep,tok,body);
+        req("PUT",ep,token,body);
     }
     void appendManifest(String r,String tok,String line)throws Exception{appendManifestStatic(r,tok,line);}
     static synchronized void appendManifestStatic(String r,String tok,String line)throws Exception{
-        String repo=normalizeRepo(r); if(repo.isEmpty()||!repo.contains("/"))throw new IOException("Enter the GitHub repo as owner/repository or paste its GitHub link."); String ep="https://api.github.com/repos/"+repo+"/contents/media-manifest.jsonl";
+        String repo=normalizeRepo(r), token=cleanToken(tok); if(repo.isEmpty()||!repo.contains("/"))throw new IOException("Enter the GitHub repo as owner/repository or paste its GitHub link."); String ep="https://api.github.com/repos/"+repo+"/contents/media-manifest.jsonl";
         String old="",sha=null;
         HttpURLConnection c=(HttpURLConnection)new URL(ep).openConnection();
         c.setRequestMethod("GET");
-        c.setRequestProperty("Authorization","Bearer "+tok);
+        c.setRequestProperty("Authorization","Bearer "+token);
         c.setRequestProperty("Accept","application/vnd.github+json");
         c.setRequestProperty("X-GitHub-Api-Version","2026-03-10");
         int code=c.getResponseCode();
@@ -140,7 +160,7 @@ public class MediaSyncService extends Service {
         }
         c.disconnect();
         String extra=sha==null?"":",\"sha\":\""+js(sha)+"\"";
-        req("PUT",ep,tok,"{\"message\":\"Update Secrets media manifest\",\"content\":\""+
+        req("PUT",ep,token,"{\"message\":\"Update Secrets media manifest\",\"content\":\""+
             Base64.encodeToString((old+line+"\\n").getBytes(StandardCharsets.UTF_8),Base64.NO_WRAP)+
             "\",\"branch\":\"main\""+extra+"}");
     }
