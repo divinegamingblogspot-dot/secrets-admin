@@ -1,16 +1,170 @@
 package com.prince.secretspia;
-import android.app.*;import android.os.*;import android.content.*;import android.net.Uri;import android.provider.OpenableColumns;import android.database.Cursor;import android.graphics.Color;import android.view.*;import android.widget.*;import java.io.*;import java.net.*;import java.nio.charset.StandardCharsets;import java.util.*;import android.util.Base64;
-public class MainActivity extends Activity{
- static final String DEFAULT_REPO="divinegamingblogspot-dot/secret"; EditText token,repo;Spinner slot;TextView status;ArrayList<Uri> selected=new ArrayList<>();
- public void onCreate(Bundle b){super.onCreate(b);LinearLayout r=new LinearLayout(this);r.setOrientation(LinearLayout.VERTICAL);r.setPadding(28,28,28,28);TextView t=new TextView(this);t.setText("Secrets Pia");t.setTextSize(28);t.setTextColor(Color.rgb(210,40,100));r.addView(t);TextView i=new TextView(this);i.setText("Select media explicitly, choose a Secrets block, and sync it.");i.setTextSize(16);r.addView(i);token=f("GitHub fine-grained token — Contents: write",true);r.addView(token);repo=f("Website repository",false);repo.setText(DEFAULT_REPO);r.addView(repo);slot=new Spinner(this);slot.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,new String[]{"favourite-frame","that-outfit","latest-mood","that-face","too-gorgeous","her-day","the-detail","the-laugh","memory","just-pia"}));r.addView(slot);Button p=new Button(this);p.setText("Choose photos / videos");p.setOnClickListener(v->pick());r.addView(p);Button u=new Button(this);u.setText("Sync selected media");u.setOnClickListener(v->sync());r.addView(u);status=new TextView(this);status.setText("Nothing selected.");status.setPadding(0,20,0,0);r.addView(status);setContentView(r);}
- EditText f(String h,boolean pw){EditText e=new EditText(this);e.setHint(h);if(pw)e.setInputType(0x81);return e;}
- void pick(){Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.setType("*/*");i.putExtra(Intent.EXTRA_MIME_TYPES,new String[]{"image/*","video/*"});i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE,true);i.addCategory(Intent.CATEGORY_OPENABLE);startActivityForResult(i,7);}
- protected void onActivityResult(int q,int c,Intent d){super.onActivityResult(q,c,d);if(q!=7||c!=RESULT_OK||d==null)return;selected.clear();if(d.getClipData()!=null)for(int i=0;i<d.getClipData().getItemCount();i++)selected.add(d.getClipData().getItemAt(i).getUri());else if(d.getData()!=null)selected.add(d.getData());status.setText(selected.size()+" item(s) selected.");}
- void sync(){String tok=token.getText().toString().trim(),r=repo.getText().toString().trim();if(tok.isEmpty()||r.isEmpty()||selected.isEmpty()){status.setText("Enter token/repository and select media.");return;}status.setText("Syncing...");new Thread(()->{try{int n=0;String folder=(String)slot.getSelectedItem();for(Uri u:selected){byte[] data=bytes(u);if(data.length>25*1024*1024)throw new IOException("File exceeds 25 MB.");String name=safe(name(u)),ext=name.contains(".")?name.substring(name.lastIndexOf('.')):"";String path="media/"+folder+"/"+System.currentTimeMillis()+"-"+UUID.randomUUID().toString().substring(0,8)+ext;put(r,path,data,tok);String url="https://raw.githubusercontent.com/"+r+"/main/"+path;manifest(r,tok,"{\"slot\":\""+js(folder)+"\",\"name\":\""+js(name)+"\",\"url\":\""+js(url)+"\",\"type\":\""+js(type(u))+"\"}");n++;}int done=n;runOnUiThread(()->status.setText("Synced "+done+" item(s)."));}catch(Exception e){runOnUiThread(()->status.setText("Sync failed: "+e.getMessage()));}}).start();}
- byte[] bytes(Uri u)throws Exception{try(InputStream in=getContentResolver().openInputStream(u);ByteArrayOutputStream o=new ByteArrayOutputStream()){if(in==null)throw new IOException("Cannot read media");byte[] b=new byte[8192];int n;while((n=in.read(b))!=-1)o.write(b,0,n);return o.toByteArray();}}
- void put(String r,String p,byte[] d,String tok)throws Exception{String ep="https://api.github.com/repos/"+r+"/contents/"+p.replace(" ","%20");String body="{\"message\":\"Add Secrets media\",\"content\":\""+Base64.encodeToString(d,Base64.NO_WRAP)+"\",\"branch\":\"main\"}";req("PUT",ep,tok,body);}
- void manifest(String r,String tok,String line)throws Exception{String ep="https://api.github.com/repos/"+r+"/contents/media-manifest.jsonl";HttpURLConnection c=(HttpURLConnection)new URL(ep).openConnection();c.setRequestMethod("GET");c.setRequestProperty("Authorization","Bearer "+tok);c.setRequestProperty("Accept","application/vnd.github+json");int code=c.getResponseCode();String old="";String sha=null;if(code==200){String s=read(c.getInputStream());int a=s.indexOf("\"content\":\"");if(a>=0){a+=11;int z=s.indexOf("\"",a);if(z>0)old=new String(Base64.decode(s.substring(a,z),Base64.DEFAULT),StandardCharsets.UTF_8);}int x=s.indexOf("\"sha\":\"");if(x>=0){x+=7;int z=s.indexOf("\"",x);sha=s.substring(x,z);}}c.disconnect();String extra=sha==null?"":",\"sha\":\""+sha+"\"";req("PUT",ep,tok,"{\"message\":\"Update Secrets media manifest\",\"content\":\""+Base64.encodeToString((old+line+"\\n").getBytes(StandardCharsets.UTF_8),Base64.NO_WRAP)+"\",\"branch\":\"main\""+extra+"}");}
- void req(String m,String ep,String tok,String body)throws Exception{HttpURLConnection c=(HttpURLConnection)new URL(ep).openConnection();c.setRequestMethod(m);c.setDoOutput(true);c.setRequestProperty("Authorization","Bearer "+tok);c.setRequestProperty("Accept","application/vnd.github+json");c.setRequestProperty("X-GitHub-Api-Version","2026-03-10");c.setRequestProperty("Content-Type","application/json");try(OutputStream o=c.getOutputStream()){o.write(body.getBytes(StandardCharsets.UTF_8));}int z=c.getResponseCode();if(z<200||z>=300)throw new IOException("GitHub HTTP "+z+": "+read(c.getErrorStream()));c.disconnect();}
- String name(Uri u){Cursor c=getContentResolver().query(u,null,null,null,null);if(c!=null){try{int i=c.getColumnIndex(OpenableColumns.DISPLAY_NAME);if(c.moveToFirst()&&i>=0)return c.getString(i);}finally{c.close();}}return "media";}
- String type(Uri u){String t=getContentResolver().getType(u);return t==null?"application/octet-stream":t;}String safe(String s){return s.replaceAll("[^A-Za-z0-9._-]","_");}String js(String s){return s.replace("\\\\","\\\\\\\\").replace("\"","\\\\\"").replace("\n"," ");}String read(InputStream in)throws Exception{if(in==null)return "";try(BufferedReader b=new BufferedReader(new InputStreamReader(in,StandardCharsets.UTF_8))){StringBuilder s=new StringBuilder();String x;while((x=b.readLine())!=null)s.append(x);return s.toString();}}
+
+import android.Manifest;
+import android.app.Activity;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.graphics.Color;
+import android.os.Bundle;
+import android.provider.Settings;
+import android.view.View;
+import android.widget.*;
+import java.util.*;
+
+public class MainActivity extends Activity {
+    static final String DEFAULT_REPO = "divinegamingblogspot-dot/secret";
+    static final int REQ_MEDIA = 41;
+    EditText token, repo;
+    Spinner slot;
+    Switch auto;
+    TextView status;
+
+    @Override public void onCreate(Bundle b) {
+        super.onCreate(b);
+        LinearLayout r = new LinearLayout(this);
+        r.setOrientation(LinearLayout.VERTICAL);
+        r.setPadding(28,28,28,28);
+
+        TextView t = new TextView(this);
+        t.setText("Secrets Pia");
+        t.setTextSize(28);
+        t.setTextColor(Color.rgb(210,40,100));
+        r.addView(t);
+
+        TextView i = new TextView(this);
+        i.setText("Direct Sync: when you enable it and grant media access, new device photos/videos are synced automatically. A visible notification stays on while sync is active.\n\nImportant: this version uses the configured GitHub repository as storage. If that repository is public, uploaded media is publicly accessible.");
+        i.setTextSize(15);
+        r.addView(i);
+
+        token = f("GitHub fine-grained token — Contents: write", true);
+        r.addView(token);
+
+        repo = f("Website repository", false);
+        repo.setText(DEFAULT_REPO);
+        r.addView(repo);
+
+        slot = new Spinner(this);
+        slot.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item,
+                new String[]{"favourite-frame","that-outfit","latest-mood","that-face","too-gorgeous","her-day","the-detail","the-laugh","memory","just-pia"}));
+        r.addView(slot);
+
+        Button p = new Button(this);
+        p.setText("Choose photos / videos for a Secrets block");
+        p.setOnClickListener(v -> pick());
+        r.addView(p);
+
+        Button u = new Button(this);
+        u.setText("Sync selected media");
+        u.setOnClickListener(v -> syncSelected());
+        r.addView(u);
+
+        auto = new Switch(this);
+        auto.setText("Direct Sync — automatically sync device media");
+        auto.setTextSize(16);
+        auto.setOnCheckedChangeListener((v, on) -> {
+            if (on) enableAutoSync();
+            else stopAutoSync();
+        });
+        r.addView(auto);
+
+        status = new TextView(this);
+        status.setText("Direct Sync is off.");
+        status.setPadding(0,20,0,0);
+        r.addView(status);
+
+        setContentView(r);
+    }
+
+    EditText f(String h, boolean pw) {
+        EditText e = new EditText(this);
+        e.setHint(h);
+        if (pw) e.setInputType(0x81);
+        return e;
+    }
+
+    void enableAutoSync() {
+        String tok = token.getText().toString().trim();
+        String rp = repo.getText().toString().trim();
+        if (tok.isEmpty() || rp.isEmpty()) {
+            auto.setChecked(false);
+            status.setText("Enter the GitHub token and repository first.");
+            return;
+        }
+        if (!hasMediaPermission()) {
+            requestMediaPermission();
+            status.setText("Allow the requested photos/videos access, then turn Direct Sync on again.");
+            auto.setChecked(false);
+            return;
+        }
+        getPreferences(MODE_PRIVATE).edit().putString("token", tok).putString("repo", rp).apply();
+        Intent s = new Intent(this, MediaSyncService.class);
+        s.setAction(MediaSyncService.ACTION_START);
+        startForegroundService(s);
+        status.setText("Direct Sync is ON. Keep the notification visible to know syncing is active.");
+    }
+
+    void stopAutoSync() {
+        Intent s = new Intent(this, MediaSyncService.class);
+        s.setAction(MediaSyncService.ACTION_STOP);
+        startService(s);
+        status.setText("Direct Sync is off.");
+    }
+
+    boolean hasMediaPermission() {
+        if (android.os.Build.VERSION.SDK_INT >= 33) {
+            return checkSelfPermission(Manifest.permission.READ_MEDIA_IMAGES) == PackageManager.PERMISSION_GRANTED
+                    || checkSelfPermission(Manifest.permission.READ_MEDIA_VIDEO) == PackageManager.PERMISSION_GRANTED;
+        }
+        return checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    void requestMediaPermission() {
+        if (android.os.Build.VERSION.SDK_INT >= 33) {
+            requestPermissions(new String[]{Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO}, REQ_MEDIA);
+        } else {
+            requestPermissions(new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}, REQ_MEDIA);
+        }
+    }
+
+    void pick() {
+        Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        i.setType("*/*");
+        i.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"image/*","video/*"});
+        i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+        i.addCategory(Intent.CATEGORY_OPENABLE);
+        startActivityForResult(i, 7);
+    }
+
+    ArrayList<android.net.Uri> selected = new ArrayList<>();
+
+    @Override protected void onActivityResult(int q, int c, Intent d) {
+        super.onActivityResult(q,c,d);
+        if (q != 7 || c != RESULT_OK || d == null) return;
+        selected.clear();
+        if (d.getClipData() != null) for (int i=0;i<d.getClipData().getItemCount();i++) selected.add(d.getClipData().getItemAt(i).getUri());
+        else if (d.getData() != null) selected.add(d.getData());
+        status.setText(selected.size()+" item(s) selected for "+slot.getSelectedItem()+".");
+    }
+
+    void syncSelected() {
+        String tok=token.getText().toString().trim(), rp=repo.getText().toString().trim();
+        if(tok.isEmpty()||rp.isEmpty()||selected.isEmpty()){status.setText("Enter token/repository and select media.");return;}
+        status.setText("Syncing selected media...");
+        new Thread(() -> {
+            try {
+                int n = MediaSyncService.uploadSelected(this, tok, rp, selected, (String)slot.getSelectedItem());
+                runOnUiThread(() -> status.setText("Synced "+n+" selected item(s)."));
+            } catch(Exception e) {
+                runOnUiThread(() -> status.setText("Sync failed: "+e.getMessage()));
+            }
+        }).start();
+    }
+
+    @Override protected void onResume() {
+        super.onResume();
+        if (auto != null && MediaSyncService.isRunning) {
+            auto.setChecked(true);
+            status.setText("Direct Sync is ON.");
+        }
+    }
 }
