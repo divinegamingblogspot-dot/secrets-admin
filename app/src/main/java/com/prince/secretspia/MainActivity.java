@@ -24,7 +24,7 @@ public class MainActivity extends Activity {
     Spinner slot;
     Switch auto;
     TextView status, selectionInfo;
-    LinearLayout root;
+    LinearLayout root;\n    LinearLayout mediaStrip, blockList;
     ArrayList<Uri> selected = new ArrayList<>();
 
     final String[] SLOTS = {
