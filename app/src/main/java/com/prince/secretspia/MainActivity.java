@@ -56,6 +56,49 @@ public class MainActivity extends Activity {
     void requestMedia(){if(Build.VERSION.SDK_INT>=34)requestPermissions(new String[]{Manifest.permission.READ_MEDIA_IMAGES,Manifest.permission.READ_MEDIA_VIDEO,Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED},REQ_MEDIA);else if(Build.VERSION.SDK_INT>=33)requestPermissions(new String[]{Manifest.permission.READ_MEDIA_IMAGES,Manifest.permission.READ_MEDIA_VIDEO},REQ_MEDIA);else requestPermissions(new String[]{Manifest.permission.READ_EXTERNAL_STORAGE},REQ_MEDIA);}
     @Override public void onRequestPermissionsResult(int r,String[]p,int[]g){super.onRequestPermissionsResult(r,p,g);if(r==REQ_MEDIA)setStatus(fullAccess()?"Full media access granted ✓":"Android gave partial/no media access. Choose Allow all photos and videos.");}
     void setStatus(String s){runOnUiThread(()->{if(web!=null)web.evaluateJavascript("javascript:(function(){var x=document.getElementById('pia-status');if(x)x.textContent="+quote(s)+"})()",null);});}
-    void showSettings(){android.widget.LinearLayout box=new android.widget.LinearLayout(this);box.setOrientation(android.widget.LinearLayout.VERTICAL);android.widget.EditText tk=new android.widget.EditText(this);tk.setHint("GitHub token");tk.setInputType(0x81);tk.setText(getSharedPreferences("cfg",0).getString("token",""));box.addView(tk);android.widget.EditText rp=new android.widget.EditText(this);rp.setHint("Website repo");rp.setText(getSharedPreferences("cfg",0).getString("repo",MediaSyncService.DEFAULT_REPO));box.addView(rp);new AlertDialog.Builder(this).setTitle("One-time setup").setMessage("Used only to upload media to the website repository.").setView(box).setPositiveButton("Save",(d,w)->{String nt=tk.getText().toString().trim(),nr=MediaSyncService.normalizeRepo(rp.getText().toString());getSharedPreferences("cfg",0).edit().putString("token",nt).putString("repo",nr).apply();if(!nt.isEmpty()&&!nr.isEmpty()&&pendingUploadUri!=null&&!pendingUploadSlot.isEmpty()){Uri u=pendingUploadUri;String s=pendingUploadSlot;pendingUploadUri=null;pendingUploadSlot="";uploadOne(u,s);}else setStatus("Setup saved ✓ · choose media, then tap a highlighted block.");}).setNegativeButton("Cancel",null).show();}
+    void showSettings(){
+        android.widget.LinearLayout box=new android.widget.LinearLayout(this);
+        box.setOrientation(android.widget.LinearLayout.VERTICAL);
+        int pad=(int)(14*getResources().getDisplayMetrics().density);
+        box.setPadding(pad,0,pad,0);
+        android.widget.EditText tk=new android.widget.EditText(this);
+        tk.setHint("Paste GitHub token (github_pat_…)");
+        tk.setSingleLine(true);
+        tk.setInputType(0x81);
+        tk.setText(getSharedPreferences("cfg",0).getString("token",""));
+        box.addView(tk);
+        android.widget.EditText rp=new android.widget.EditText(this);
+        rp.setHint("GitHub repo or full link");
+        rp.setSingleLine(true);
+        rp.setInputType(0x1);
+        rp.setText(getSharedPreferences("cfg",0).getString("repo",MediaSyncService.DEFAULT_REPO));
+        box.addView(rp);
+        AlertDialog dlg=new AlertDialog.Builder(this).setTitle("One-time setup")
+            .setMessage("Paste the token value and your Secrets GitHub repository. The app will test access before saving.")
+            .setView(box).setPositiveButton("Test & Save",null).setNegativeButton("Cancel",null).create();
+        dlg.setOnShowListener(x->dlg.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+            String nt=MediaSyncService.cleanToken(tk.getText().toString()),nr=MediaSyncService.normalizeRepo(rp.getText().toString());
+            if(nt.isEmpty()){tk.setError("Paste your GitHub token");return;}
+            if(nr.isEmpty()||!nr.contains("/")){rp.setError("Use owner/repository or paste the GitHub link");return;}
+            setStatus("Checking GitHub access…");
+            dlg.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(false);
+            new Thread(()->{
+                try{
+                    MediaSyncService.validateAccess(nr,nt);
+                    getSharedPreferences("cfg",0).edit().putString("token",nt).putString("repo",nr).apply();
+                    runOnUiThread(()->{
+                        dlg.dismiss();
+                        setStatus("GitHub connected ✓");
+                        if(pendingUploadUri!=null&&!pendingUploadSlot.isEmpty()){
+                            Uri u=pendingUploadUri;String s=pendingUploadSlot;pendingUploadUri=null;pendingUploadSlot="";uploadOne(u,s);
+                        }
+                    });
+                }catch(Exception e){
+                    runOnUiThread(()->{dlg.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(true);setStatus("GitHub setup failed: "+e.getMessage());});
+                }
+            }).start();
+        }));
+        dlg.show();
+    }
     @Override protected void onResume(){super.onResume();if(pageReady)inject();}
 }
