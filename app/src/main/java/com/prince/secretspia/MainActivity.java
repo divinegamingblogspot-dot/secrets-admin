@@ -336,8 +336,8 @@ public class MainActivity extends Activity {
 
     void injectMediaIntoPage(String slot,String url){
         if(url==null)return;
-        String js="javascript:(function(){var e=document.querySelector('.gallery .photo[data-slot='+"+q(slot)+"]');"+
-            "if(e){e.style.backgroundImage='linear-gradient(180deg,rgba(0,0,0,.05),rgba(0,0,0,.72)),url(\\'"+url.replace("\\","\\\\").replace("'","%27")+"\\')';e.style.backgroundSize='cover';e.style.backgroundPosition='center';e.classList.add('pia-has');}})()";
+        String js="javascript:(function(){var e=document.querySelector('[data-slot='+"+q(slot)+"]')||document.querySelector('[data-photo-slot='+"+q(slot)+"]');"+
+            "if(e){var t=e.dataset.photoSlot?e.querySelector('.block-photo'):e;if(t){t.style.backgroundImage='linear-gradient(180deg,rgba(0,0,0,.05),rgba(0,0,0,.72)),url(\\'"+url.replace("\\","\\\\").replace("'","%27")+"\\')';t.style.backgroundSize='cover';t.style.backgroundPosition='center';e.classList.add('has-pia-media');}}})()";
         web.evaluateJavascript(js,null);
     }
 
