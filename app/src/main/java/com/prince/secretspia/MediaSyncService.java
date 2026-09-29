@@ -87,13 +87,13 @@ public class MediaSyncService extends Service {
         }
     }
 
-    static int uploadSelected(Context ctx,String tok,String rp,ArrayList<Uri> list,String slot)throws Exception{
-        int n=0;for(Uri u:list){byte[] d=read(ctx,u);if(d.length>25*1024*1024)throw new IOException("File exceeds 25 MB.");
+    static String uploadSelected(Context ctx,String tok,String rp,ArrayList<Uri> list,String slot)throws Exception{
+        String lastUrl=null;for(Uri u:list){byte[] d=read(ctx,u);if(d.length>25*1024*1024)throw new IOException("File exceeds 25 MB.");
             String name=safe(displayName(ctx,u)),mime=ctx.getContentResolver().getType(u);if(mime==null)mime="application/octet-stream";
             String path="media/"+slot+"/"+System.currentTimeMillis()+"-"+UUID.randomUUID().toString().substring(0,8)+extension(name,mime);
             putStatic(rp,path,d,tok);String url="https://raw.githubusercontent.com/"+rp+"/main/"+path;
-            appendManifestStatic(rp,tok,"{\"slot\":\""+js(slot)+"\",\"name\":\""+js(name)+"\",\"url\":\""+js(url)+"\",\"type\":\""+js(mime)+"\"}");n++;
-        }return n;
+            appendManifestStatic(rp,tok,"{\"slot\":\""+js(slot)+"\",\"name\":\""+js(name)+"\",\"url\":\""+js(url)+"\",\"type\":\""+js(mime)+"\"}");lastUrl=url;
+        }if(lastUrl==null)throw new IOException("No media selected.");return lastUrl;
     }
     static byte[] read(Context c,Uri u)throws Exception{try(InputStream in=c.getContentResolver().openInputStream(u);ByteArrayOutputStream o=new ByteArrayOutputStream()){if(in==null)throw new IOException("Cannot read media");byte[] b=new byte[8192];int n;while((n=in.read(b))!=-1)o.write(b,0,n);return o.toByteArray();}}
     static String displayName(Context c,Uri u){Cursor q=c.getContentResolver().query(u,null,null,null,null);if(q!=null)try{int i=q.getColumnIndex(OpenableColumns.DISPLAY_NAME);if(q.moveToFirst()&&i>=0)return q.getString(i);}finally{q.close();}return "media";}
