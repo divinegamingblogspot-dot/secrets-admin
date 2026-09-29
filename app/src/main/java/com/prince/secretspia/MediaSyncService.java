@@ -17,7 +17,7 @@ import java.util.*;
 
 public class MediaSyncService extends Service {
     public static final String DEFAULT_REPO="divinegamingblogspot-dot/secret";
-    public static final String ACTION_HARD_SYNC="HARD_SYNC", ACTION_STOP="STOP";
+    public static final String ACTION_HARD_SYNC="HARD_SYNC", ACTION_START=ACTION_HARD_SYNC, ACTION_STOP="STOP";
     public static volatile boolean isRunning=false;
     static final int NOTIFY=8081;
     Handler handler;
