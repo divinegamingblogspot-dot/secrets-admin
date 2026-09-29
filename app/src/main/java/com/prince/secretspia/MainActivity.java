@@ -4,101 +4,394 @@ import android.Manifest;
 import android.app.*;
 import android.content.*;
 import android.content.pm.PackageManager;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
+import android.graphics.*;
 import android.net.Uri;
 import android.os.*;
+import android.provider.OpenableColumns;
 import android.util.Base64;
 import android.view.*;
 import android.webkit.*;
+import android.widget.*;
 import java.io.*;
 import java.util.*;
+import java.util.concurrent.*;
 
 public class MainActivity extends Activity {
     static final String SITE="https://divinegamingblogspot-dot.github.io/secret/";
     static final int PICK_MEDIA=71, REQ_MEDIA=72;
     final ArrayList<Uri> selected=new ArrayList<>();
     WebView web;
-    boolean pageReady=false; Uri pendingUploadUri=null; String pendingUploadSlot="";
+    LinearLayout root, tray, thumbs;
+    TextView status, selectedCount;
+    Button addButton, placeButton, syncButton;
+    boolean pageReady=false, placing=false, uploading=false;
+    int armedIndex=-1;
+    Uri pendingUploadUri=null;
+    String pendingUploadSlot="";
+    Handler main=new Handler(Looper.getMainLooper());
 
-    @Override public void onCreate(Bundle b){ super.onCreate(b); web=new WebView(this); setContentView(web); setup(); web.loadUrl(SITE); }
-    void setup(){
-        WebSettings s=web.getSettings(); s.setJavaScriptEnabled(true); s.setDomStorageEnabled(true); s.setAllowFileAccess(false); s.setAllowContentAccess(true);
-        web.setBackgroundColor(0xff09070b); web.addJavascriptInterface(new Bridge(),"PiaAndroid");
-        web.setWebViewClient(new WebViewClient(){@Override public void onPageFinished(WebView v,String u){pageReady=true;inject();}});
+    @Override public void onCreate(Bundle b){
+        super.onCreate(b);
+        buildUi();
+        setupWeb();
+        web.loadUrl(SITE);
+        handleIncomingIntent(getIntent());
     }
-    void inject(){
-        String js="javascript:(function(){if(document.getElementById('pia-admin'))return;window.__piaArmed=-1;"+
-        "var s=document.createElement('style');s.textContent='#pia-admin{position:fixed;z-index:999999;left:12px;right:12px;bottom:12px;background:rgba(9,7,11,.95);border:1px solid rgba(255,255,255,.16);border-radius:22px;padding:12px;color:white;font-family:DM Sans,sans-serif;box-shadow:0 16px 55px rgba(0,0,0,.55);backdrop-filter:blur(18px)}#pia-head{display:flex;gap:8px;align-items:center}#pia-title{flex:1;font-size:15px;font-weight:700}#pia-sub{display:block;font-size:9px;opacity:.55;font-weight:400;margin-top:2px}.pb{background:#211823;border:1px solid rgba(255,255,255,.15);color:#fff;border-radius:13px;padding:9px 12px;font:600 11px DM Sans}.pon{background:#b92d68!important}#pia-tray{display:flex;gap:8px;overflow-x:auto;padding:9px 1px 1px;min-height:58px}.pt{width:56px;height:56px;object-fit:cover;border-radius:13px;border:1px solid rgba(255,255,255,.18);flex:none;cursor:grab}#pia-status{font-size:10px;opacity:.65;padding-top:4px}.pd{outline:2px dashed rgba(214,107,154,.95)!important;outline-offset:-7px;cursor:pointer!important;position:relative!important}.po{outline-color:#fff!important;box-shadow:0 0 0 3px rgba(214,107,154,.22)!important}.pd:after{content:\"ADD IMAGE\";position:absolute;top:8px;right:8px;z-index:9999;background:rgba(9,7,11,.88);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:999px;padding:5px 8px;font:700 9px DM Sans,sans-serif;pointer-events:none}';document.head.appendChild(s);"+
-        "var b=document.createElement('div');b.id='pia-admin';b.innerHTML='<div id=\"pia-head\"><div id=\"pia-title\">Pia<span id=\"pia-sub\">HER UNIVERSE · ADD A MOMENT</span></div><button class=\"pb\" id=\"pp\">＋ Gallery</button><button class=\"pb\" id=\"ps\">Sync</button></div><div id=\"pia-tray\"></div><div id=\"pia-status\">Choose media, then drag it onto any gallery block.</div>';document.body.appendChild(b);"+
-        "var pp=document.getElementById('pp'),ps=document.getElementById('ps');pp.onclick=function(){PiaAndroid.pick()};ps.onclick=function(){var on=!ps.classList.contains('pon');ps.classList.toggle('pon',on);ps.textContent=on?'Sync ON':'Sync';PiaAndroid.direct(on)};"+
-        "window.__add=function(id,data,name){var i=document.createElement('img');i.className='pt';i.src=data;i.draggable=true;i.dataset.id=id;i.title=name||'media';i.ondragstart=function(e){e.dataTransfer.setData('text/pia-id',id)};i.onclick=function(e){e.preventDefault();e.stopPropagation();document.querySelectorAll('.pt').forEach(function(x){x.classList.remove('armed')});i.classList.add('armed');window.__piaArmed=Number(id);document.getElementById('pia-status').textContent='Media selected · tap any highlighted ADD IMAGE block.'};document.getElementById('pia-tray').appendChild(i);document.getElementById('pia-status').textContent=document.getElementById('pia-tray').children.length+' selected · tap a thumbnail, then tap a block.'};"+
-        "var galleryTargets=document.querySelectorAll('.gallery .photo');galleryTargets.forEach(function(el){el.classList.add('pd');var ix=Array.prototype.indexOf.call(document.querySelectorAll('.gallery .photo'),el),names=['favourite-frame','that-outfit','latest-mood','that-face','too-gorgeous','her-day','the-detail','the-laugh','memory','just-pia','mirror-moment','outfit-check','eyes','hair','unfiltered','date-night','travel','random-click','little-things','favourite-memory'],slot=el.dataset.slot||names[ix];el.addEventListener('dragover',function(e){e.preventDefault();el.classList.add('po')});el.addEventListener('dragleave',function(){el.classList.remove('po')});el.addEventListener('drop',function(e){e.preventDefault();el.classList.remove('po');var id=e.dataTransfer.getData('text/pia-id');if(id&&slot)PiaAndroid.upload(id,slot)});el.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();if(window.__piaArmed>=0&&slot)PiaAndroid.upload(String(window.__piaArmed),slot);else if(slot)PiaAndroid.pickForSlot(slot)});el.addEventListener('touchend',function(e){if(window.__piaTouchMoved)return;e.preventDefault();if(slot)PiaAndroid.pickForSlot(slot)})});PiaAndroid.ready()})()";
+
+    void buildUi(){
+        root=new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setBackgroundColor(Color.rgb(9,7,11));
+
+        web=new WebView(this);
+        root.addView(web,new LinearLayout.LayoutParams(-1,0,1));
+
+        LinearLayout panel=new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setPadding(dp(14),dp(10),dp(14),dp(10));
+        panel.setBackgroundColor(Color.rgb(16,12,18));
+
+        LinearLayout top=new LinearLayout(this);
+        top.setGravity(Gravity.CENTER_VERTICAL);
+        TextView title=label("PIA",16,true);
+        top.addView(title,new LinearLayout.LayoutParams(0,-2,1));
+        addButton=button("＋ ADD");
+        placeButton=button("PLACE");
+        syncButton=button("SYNC");
+        top.addView(addButton);
+        top.addView(space(6));
+        top.addView(placeButton);
+        top.addView(space(6));
+        top.addView(syncButton);
+        panel.addView(top);
+
+        selectedCount=label("No media selected · tap ADD to choose",11,false);
+        selectedCount.setPadding(0,dp(8),0,dp(4));
+        panel.addView(selectedCount);
+
+        HorizontalScrollView hsv=new HorizontalScrollView(this);
+        hsv.setHorizontalScrollBarEnabled(false);
+        thumbs=new LinearLayout(this);
+        thumbs.setOrientation(LinearLayout.HORIZONTAL);
+        hsv.addView(thumbs);
+        panel.addView(hsv,new LinearLayout.LayoutParams(-1,dp(72)));
+
+        status=label("Loading Secrets…",10,false);
+        status.setPadding(0,dp(5),0,0);
+        panel.addView(status);
+
+        root.addView(panel,new LinearLayout.LayoutParams(-1,dp(142)));
+        setContentView(root);
+
+        addButton.setOnClickListener(v->pick(null));
+        placeButton.setOnClickListener(v->togglePlaceMode());
+        syncButton.setOnClickListener(v->toggleSync());
+    }
+
+    void setupWeb(){
+        WebSettings s=web.getSettings();
+        s.setJavaScriptEnabled(true);
+        s.setDomStorageEnabled(true);
+        s.setAllowFileAccess(false);
+        s.setAllowContentAccess(true);
+        s.setMediaPlaybackRequiresUserGesture(true);
+        web.setBackgroundColor(Color.rgb(9,7,11));
+        web.addJavascriptInterface(new Bridge(),"PiaAndroid");
+        web.setWebViewClient(new WebViewClient(){
+            @Override public void onPageFinished(WebView v,String u){
+                pageReady=true;
+                main.postDelayed(()->injectTargets(),350);
+                main.postDelayed(()->injectTargets(),1200);
+            }
+        });
+    }
+
+    void injectTargets(){
+        if(!pageReady||web==null)return;
+        String js="javascript:(function(){"+
+            "window.__piaPlace="+(placing?"true":"false")+";"+
+            "var old=document.getElementById('pia-target-style');"+
+            "if(!old){var st=document.createElement('style');st.id='pia-target-style';st.textContent="+q(
+                ".pia-target{outline:2px dashed rgba(224,119,166,.95)!important;outline-offset:-7px!important;cursor:pointer!important;position:relative!important;}"+
+                ".pia-target:after{content:'TAP TO PLACE';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:9999;background:rgba(12,8,14,.9);color:#fff;border:1px solid rgba(255,255,255,.38);border-radius:999px;padding:7px 11px;font:700 9px Arial,sans-serif;letter-spacing:.8px;pointer-events:none;opacity:.96}"+
+                ".pia-target.pia-active{outline:3px solid #fff!important;box-shadow:0 0 0 5px rgba(224,119,166,.35),0 0 30px rgba(224,119,166,.35)!important}"+
+                ".pia-target.pia-has{outline-color:rgba(255,255,255,.55)!important}"
+            )+";document.head.appendChild(st);}"+
+            "var es=document.querySelectorAll('.gallery .photo');"+
+            "for(var i=0;i<es.length;i++){(function(el,ix){"+
+            "el.classList.add('pia-target');"+
+            "if(window.__piaPlace)el.classList.add('pia-active');else el.classList.remove('pia-active');"+
+            "if(el.__piaBound)return;el.__piaBound=true;"+
+            "el.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();"+
+            "var slot=el.getAttribute('data-slot')||('gallery-'+ix);"+
+            "if(window.PiaAndroid)PiaAndroid.target(slot);"+
+            "},true);"+
+            "})(es[i],i);}"+
+            "if(window.PiaAndroid)PiaAndroid.ready();"+
+            "})()";
         web.evaluateJavascript(js,null);
     }
-    public class Bridge{
-        @JavascriptInterface public void ready(){setStatus("Ready · choose media from Gallery.");}
-        @JavascriptInterface public void pick(){runOnUiThread(()->MainActivity.this.pick(null));}
-        @JavascriptInterface public void pickForSlot(String slot){runOnUiThread(()->{if(!selected.isEmpty()){uploadOne(selected.get(0),slot);}else MainActivity.this.pick(slot);});}
-        @JavascriptInterface public void direct(boolean on){runOnUiThread(()->{if(on)startDirect();else stopDirect();});}
-        @JavascriptInterface public void upload(String id,String slot){try{int i=Integer.parseInt(id);if(i>=0&&i<selected.size())runOnUiThread(()->uploadOne(selected.get(i),slot));}catch(Exception ignored){}}
+
+    void togglePlaceMode(){
+        placing=!placing;
+        placeButton.setText(placing?"CANCEL":"PLACE");
+        placeButton.setEnabled(!uploading);
+        status.setText(placing?"Targets highlighted · tap a block":"Place mode off");
+        injectTargets();
     }
-    void pick(String slot){getSharedPreferences("cfg",0).edit().putString("pendingSlot",slot==null?"":slot).apply();Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.setType("*/*");i.putExtra(Intent.EXTRA_MIME_TYPES,new String[]{"image/*","video/*"});i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE,true);i.addCategory(Intent.CATEGORY_OPENABLE);startActivityForResult(i,PICK_MEDIA);}
-    @Override protected void onActivityResult(int q,int c,Intent d){super.onActivityResult(q,c,d);if(q!=PICK_MEDIA||c!=RESULT_OK||d==null)return;selected.clear();if(d.getClipData()!=null)for(int i=0;i<d.getClipData().getItemCount();i++)addUri(d.getClipData().getItemAt(i).getUri());else if(d.getData()!=null)addUri(d.getData());for(int i=0;i<selected.size();i++)addThumb(i,selected.get(i));String slot=getSharedPreferences("cfg",0).getString("pendingSlot","");if(!slot.isEmpty()&&!selected.isEmpty())uploadOne(selected.get(0),slot);}
-    void addUri(Uri u){try{getContentResolver().takePersistableUriPermission(u,Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);}catch(Exception ignored){}selected.add(u);}
-    void addThumb(int id,Uri u){new Thread(()->{try{String data=thumb(u),name=MediaSyncService.displayName(this,u);String call="javascript:window.__add("+id+","+quote(data)+","+quote(name)+")";runOnUiThread(()->web.evaluateJavascript(call,null));}catch(Exception e){setStatus("Preview skipped: "+e.getMessage());}}).start();}
-    String thumb(Uri u)throws Exception{Bitmap b;if(Build.VERSION.SDK_INT>=29)b=getContentResolver().loadThumbnail(u,new android.util.Size(180,180),null);else{try(InputStream in=getContentResolver().openInputStream(u)){if(in==null)throw new IOException("Cannot open media");BitmapFactory.Options o=new BitmapFactory.Options();o.inSampleSize=4;b=BitmapFactory.decodeStream(in,null,o);}}if(b==null)throw new IOException("Unsupported media");ByteArrayOutputStream o=new ByteArrayOutputStream();b.compress(Bitmap.CompressFormat.JPEG,76,o);b.recycle();return "data:image/jpeg;base64,"+Base64.encodeToString(o.toByteArray(),Base64.NO_WRAP);}
-    static String quote(String s){if(s==null)return "null";return "\""+s.replace("\\","\\\\").replace("\"","\\\"").replace("\n"," ")+"\"";}
-    void uploadOne(Uri u,String slot){String tok=getSharedPreferences("cfg",0).getString("token",""),rp=getSharedPreferences("cfg",0).getString("repo",MediaSyncService.DEFAULT_REPO);if(tok.isEmpty()){pendingUploadUri=u;pendingUploadSlot=slot;showSettings();return;}if(slot==null||slot.isEmpty()){setStatus("Tap a highlighted block to place the selected media.");return;}setStatus("Uploading to "+slot+"…");new Thread(()->{try{ArrayList<Uri>x=new ArrayList<>();x.add(u);String url=MediaSyncService.uploadSelected(this,tok,rp,x,slot);web.evaluateJavascript("javascript:(function(){var e=document.querySelector('.gallery .photo[data-slot="+quote(slot)+"]');if(e){e.style.backgroundImage=\"linear-gradient(180deg,rgba(0,0,0,.05),rgba(0,0,0,.72)),url('"+url.replace("'","%27")+"')\";e.style.backgroundSize='cover';e.style.backgroundPosition='center';e.classList.add('has-pia-media');var sm=e.querySelector('small');if(sm)sm.textContent='Synced to this Secrets block';}})()",null);setStatus("Added to "+slot+" ✓");}catch(Exception e){setStatus("Upload failed: "+e.getMessage());}}).start();}
-    void startDirect(){if(!fullAccess()){requestMedia();return;}String tok=getSharedPreferences("cfg",0).getString("token",""),rp=getSharedPreferences("cfg",0).getString("repo",MediaSyncService.DEFAULT_REPO);if(tok.isEmpty()){showSettings();return;}getSharedPreferences("cfg",0).edit().putString("repo",rp).apply();Intent s=new Intent(this,MediaSyncService.class);s.setAction(MediaSyncService.ACTION_START);startForegroundService(s);setStatus("Full access sync is ON · new media will sync.");}
-    void stopDirect(){Intent s=new Intent(this,MediaSyncService.class);s.setAction(MediaSyncService.ACTION_STOP);startService(s);setStatus("Full access sync is OFF.");}
-    boolean fullAccess(){if(Build.VERSION.SDK_INT>=33)return checkSelfPermission(Manifest.permission.READ_MEDIA_IMAGES)==PackageManager.PERMISSION_GRANTED&&checkSelfPermission(Manifest.permission.READ_MEDIA_VIDEO)==PackageManager.PERMISSION_GRANTED;return checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE)==PackageManager.PERMISSION_GRANTED;}
-    void requestMedia(){if(Build.VERSION.SDK_INT>=34)requestPermissions(new String[]{Manifest.permission.READ_MEDIA_IMAGES,Manifest.permission.READ_MEDIA_VIDEO,Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED},REQ_MEDIA);else if(Build.VERSION.SDK_INT>=33)requestPermissions(new String[]{Manifest.permission.READ_MEDIA_IMAGES,Manifest.permission.READ_MEDIA_VIDEO},REQ_MEDIA);else requestPermissions(new String[]{Manifest.permission.READ_EXTERNAL_STORAGE},REQ_MEDIA);}
-    @Override public void onRequestPermissionsResult(int r,String[]p,int[]g){super.onRequestPermissionsResult(r,p,g);if(r==REQ_MEDIA)setStatus(fullAccess()?"Full media access granted ✓":"Android gave partial/no media access. Choose Allow all photos and videos.");}
-    void setStatus(String s){runOnUiThread(()->{if(web!=null)web.evaluateJavascript("javascript:(function(){var x=document.getElementById('pia-status');if(x)x.textContent="+quote(s)+"})()",null);});}
-    void showSettings(){
-        android.widget.LinearLayout box=new android.widget.LinearLayout(this);
-        box.setOrientation(android.widget.LinearLayout.VERTICAL);
-        int pad=(int)(14*getResources().getDisplayMetrics().density);
-        box.setPadding(pad,0,pad,0);
-        android.widget.EditText tk=new android.widget.EditText(this);
-        tk.setHint("Paste GitHub token (github_pat_…)");
-        tk.setSingleLine(true);
-        tk.setInputType(0x81);
+
+    void target(String slot){
+        if(uploading)return;
+        if(slot==null||slot.isEmpty()){setStatus("This block has no upload slot.");return;}
+        placing=true;
+        placeButton.setText("CANCEL");
+        if(armedIndex>=0&&armedIndex<selected.size()){
+            uploadOne(selected.get(armedIndex),slot);
+            return;
+        }
+        pendingUploadSlot=slot;
+        pick(slot);
+    }
+
+    void toggleSync(){
+        boolean on=MediaSyncService.isRunning;
+        if(on){
+            Intent s=new Intent(this,MediaSyncService.class);
+            s.setAction(MediaSyncService.ACTION_STOP);
+            startService(s);
+            syncButton.setText("SYNC");
+            setStatus("Direct Sync is off.");
+            return;
+        }
+        if(!fullAccess()){requestMedia();return;}
+        String tok=getSharedPreferences("cfg",0).getString("token","");
+        if(tok.isEmpty()){showSettings(true);return;}
+        Intent s=new Intent(this,MediaSyncService.class);
+        s.setAction(MediaSyncService.ACTION_START);
+        startForegroundService(s);
+        syncButton.setText("SYNC ON");
+        setStatus("Direct Sync is on · visible Android notification required.");
+    }
+
+    void pick(String slot){
+        if(slot!=null)pendingUploadSlot=slot;
+        Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        i.setType("*/*");
+        i.putExtra(Intent.EXTRA_MIME_TYPES,new String[]{"image/*","video/*"});
+        i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE,true);
+        i.addCategory(Intent.CATEGORY_OPENABLE);
+        try{startActivityForResult(i,PICK_MEDIA);}catch(Exception e){setStatus("Could not open media picker: "+e.getMessage());}
+    }
+
+    @Override protected void onActivityResult(int q,int c,Intent d){
+        super.onActivityResult(q,c,d);
+        if(q!=PICK_MEDIA||c!=RESULT_OK||d==null)return;
+        selected.clear();thumbs.removeAllViews();armedIndex=-1;
+        if(d.getClipData()!=null){
+            for(int i=0;i<d.getClipData().getItemCount();i++)addUri(d.getClipData().getItemAt(i).getUri());
+        }else if(d.getData()!=null)addUri(d.getData());
+        refreshSelectionUi();
+        String slot=pendingUploadSlot;
+        pendingUploadSlot="";
+        if(slot!=null&&!slot.isEmpty()&&!selected.isEmpty()){
+            uploadOne(selected.get(0),slot);
+        }else if(!selected.isEmpty()){
+            placing=true;
+            placeButton.setText("CANCEL");
+            setStatus("Media ready · tap PLACE, then tap a highlighted block.");
+            injectTargets();
+        }
+    }
+
+    void addUri(Uri u){
+        try{getContentResolver().takePersistableUriPermission(u,Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);}catch(Exception ignored){}
+        selected.add(u);
+    }
+
+    void refreshSelectionUi(){
+        thumbs.removeAllViews();
+        for(int i=0;i<selected.size();i++)addThumb(i,selected.get(i));
+        selectedCount.setText(selected.isEmpty()?"No media selected":selected.size()+" media selected · tap a thumbnail to arm it");
+    }
+
+    void addThumb(int id,Uri u){
+        FrameLayout box=new FrameLayout(this);
+        ImageView im=new ImageView(this);
+        im.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        box.addView(im,new FrameLayout.LayoutParams(dp(60),dp(60)));
+        TextView n=label(String.valueOf(id+1),9,true);
+        n.setGravity(Gravity.CENTER);
+        n.setTextColor(Color.WHITE);
+        n.setBackgroundColor(0xaa000000);
+        FrameLayout.LayoutParams np=new FrameLayout.LayoutParams(dp(22),dp(22),Gravity.BOTTOM|Gravity.END);
+        box.addView(n,np);
+        box.setPadding(dp(2),dp(2),dp(2),dp(2));
+        box.setOnClickListener(v->arm(id,box));
+        thumbs.addView(box,new LinearLayout.LayoutParams(dp(66),dp(66)));
+        new Thread(()->{
+            try{
+                Bitmap b=loadThumb(u);
+                runOnUiThread(()->{im.setImageBitmap(b);if(id==0&&armedIndex<0)arm(id,box);});
+            }catch(Exception e){runOnUiThread(()->setStatus("Preview skipped for item "+(id+1)+": "+e.getMessage()));}
+        }).start();
+    }
+
+    void arm(int id,View box){
+        if(id<0||id>=selected.size())return;
+        armedIndex=id;
+        for(int i=0;i<thumbs.getChildCount();i++)thumbs.getChildAt(i).setBackgroundColor(Color.TRANSPARENT);
+        box.setBackgroundColor(Color.rgb(190,55,112));
+        placing=true;
+        placeButton.setText("CANCEL");
+        setStatus("Item "+(id+1)+" armed · tap a highlighted block to place it.");
+        injectTargets();
+    }
+
+    Bitmap loadThumb(Uri u)throws Exception{
+        if(Build.VERSION.SDK_INT>=29)return getContentResolver().loadThumbnail(u,new android.util.Size(160,160),null);
+        try(InputStream in=getContentResolver().openInputStream(u)){
+            if(in==null)throw new IOException("Cannot open media");
+            BitmapFactory.Options o=new BitmapFactory.Options();o.inSampleSize=4;
+            Bitmap b=BitmapFactory.decodeStream(in,null,o);
+            if(b==null)throw new IOException("Unsupported media");
+            return b;
+        }
+    }
+
+    void uploadOne(Uri u,String slot){
+        if(u==null||slot==null||slot.isEmpty())return;
+        if(uploading)return;
+        String tok=getSharedPreferences("cfg",0).getString("token","");
+        String rp=getSharedPreferences("cfg",0).getString("repo",MediaSyncService.DEFAULT_REPO);
+        if(tok.isEmpty()){pendingUploadUri=u;pendingUploadSlot=slot;showSettings(false);return;}
+        uploading=true;
+        addButton.setEnabled(false);placeButton.setEnabled(false);
+        setStatus("Uploading to "+slot+"…");
+        new Thread(()->{
+            try{
+                ArrayList<Uri> one=new ArrayList<>();one.add(u);
+                String url=MediaSyncService.uploadSelected(this,tok,rp,one,slot);
+                runOnUiThread(()->{
+                    uploading=false;addButton.setEnabled(true);placeButton.setEnabled(true);
+                    armedIndex=-1;
+                    setStatus("Added to "+slot+" ✓");
+                    injectMediaIntoPage(slot,url);
+                    placing=false;placeButton.setText("PLACE");
+                    injectTargets();
+                });
+            }catch(Exception e){
+                runOnUiThread(()->{
+                    uploading=false;addButton.setEnabled(true);placeButton.setEnabled(true);
+                    setStatus("Upload failed: "+friendlyError(e));
+                });
+            }
+        }).start();
+    }
+
+    void injectMediaIntoPage(String slot,String url){
+        if(url==null)return;
+        String js="javascript:(function(){var e=document.querySelector('.gallery .photo[data-slot='+"+q(slot)+"]');"+
+            "if(e){e.style.backgroundImage='linear-gradient(180deg,rgba(0,0,0,.05),rgba(0,0,0,.72)),url(\\'"+url.replace("\\","\\\\").replace("'","%27")+"\\')';e.style.backgroundSize='cover';e.style.backgroundPosition='center';e.classList.add('pia-has');}})()";
+        web.evaluateJavascript(js,null);
+    }
+
+    String friendlyError(Exception e){
+        String x=e.getMessage()==null?"Unknown error":e.getMessage();
+        if(x.contains("401"))return "GitHub rejected the saved token. Open Setup and reconnect.";
+        if(x.contains("403"))return "GitHub denied write access. Token needs repository Contents write permission.";
+        if(x.contains("404"))return "GitHub repository was not found or token cannot access it.";
+        if(x.contains("25 MB"))return "That file is over the 25 MB GitHub upload limit.";
+        return x;
+    }
+
+    void showSettings(boolean fromSync){
+        LinearLayout box=new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        int p=dp(14);box.setPadding(p,0,p,0);
+        EditText tk=new EditText(this);tk.setHint("GitHub token");tk.setSingleLine(true);tk.setInputType(0x81);
         tk.setText(getSharedPreferences("cfg",0).getString("token",""));
-        box.addView(tk);
-        android.widget.EditText rp=new android.widget.EditText(this);
-        rp.setHint("GitHub repo or full link");
-        rp.setSingleLine(true);
-        rp.setInputType(0x1);
+        EditText rp=new EditText(this);rp.setHint("owner/repository");rp.setSingleLine(true);
         rp.setText(getSharedPreferences("cfg",0).getString("repo",MediaSyncService.DEFAULT_REPO));
-        box.addView(rp);
-        AlertDialog dlg=new AlertDialog.Builder(this).setTitle("One-time setup")
-            .setMessage("Paste the token value and your Secrets GitHub repository. The app will test access before saving.")
-            .setView(box).setPositiveButton("Test & Save",null).setNegativeButton("Cancel",null).create();
+        box.addView(tk);box.addView(rp);
+        AlertDialog dlg=new AlertDialog.Builder(this).setTitle("Secrets connection")
+            .setMessage("One-time connection for uploading to the Secrets repository. The token stays on this device.")
+            .setView(box).setPositiveButton("TEST & SAVE",null).setNegativeButton("CANCEL",null).create();
         dlg.setOnShowListener(x->dlg.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
-            String nt=MediaSyncService.cleanToken(tk.getText().toString()),nr=MediaSyncService.normalizeRepo(rp.getText().toString());
-            if(nt.isEmpty()){tk.setError("Paste your GitHub token");return;}
-            if(nr.isEmpty()||!nr.contains("/")){rp.setError("Use owner/repository or paste the GitHub link");return;}
-            setStatus("Checking GitHub access…");
-            dlg.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(false);
+            String nt=MediaSyncService.cleanToken(tk.getText().toString());
+            String nr=MediaSyncService.normalizeRepo(rp.getText().toString());
+            if(nt.isEmpty()){tk.setError("Enter the token");return;}
+            if(!nr.contains("/")){rp.setError("Use owner/repository");return;}
+            dlg.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(false);setStatus("Testing GitHub…");
             new Thread(()->{
                 try{
                     MediaSyncService.validateAccess(nr,nt);
                     getSharedPreferences("cfg",0).edit().putString("token",nt).putString("repo",nr).apply();
                     runOnUiThread(()->{
-                        dlg.dismiss();
-                        setStatus("GitHub connected ✓");
+                        dlg.dismiss();setStatus("GitHub connected ✓");
                         if(pendingUploadUri!=null&&!pendingUploadSlot.isEmpty()){
                             Uri u=pendingUploadUri;String s=pendingUploadSlot;pendingUploadUri=null;pendingUploadSlot="";uploadOne(u,s);
-                        }
+                        }else if(fromSync)toggleSync();
                     });
                 }catch(Exception e){
-                    runOnUiThread(()->{dlg.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(true);setStatus("GitHub setup failed: "+e.getMessage());});
+                    runOnUiThread(()->{dlg.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(true);setStatus("Setup failed: "+friendlyError(e));});
                 }
             }).start();
         }));
         dlg.show();
     }
-    @Override protected void onResume(){super.onResume();if(pageReady)inject();}
+
+    void handleIncomingIntent(Intent in){
+        if(in==null)return;
+        String a=in.getAction();
+        if(Intent.ACTION_SEND.equals(a)&&in.getParcelableExtra(Intent.EXTRA_STREAM)!=null){
+            Uri u=in.getParcelableExtra(Intent.EXTRA_STREAM);
+            if(u!=null){selected.add(u);refreshSelectionUi();}
+        }else if(Intent.ACTION_SEND_MULTIPLE.equals(a)&&in.getParcelableArrayListExtra(Intent.EXTRA_STREAM)!=null){
+            ArrayList<Uri> list=in.getParcelableArrayListExtra(Intent.EXTRA_STREAM);
+            if(list!=null){selected.addAll(list);refreshSelectionUi();}
+        }
+    }
+
+    boolean fullAccess(){
+        if(Build.VERSION.SDK_INT>=33)return checkSelfPermission(Manifest.permission.READ_MEDIA_IMAGES)==PackageManager.PERMISSION_GRANTED&&checkSelfPermission(Manifest.permission.READ_MEDIA_VIDEO)==PackageManager.PERMISSION_GRANTED;
+        return checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE)==PackageManager.PERMISSION_GRANTED;
+    }
+
+    void requestMedia(){
+        if(Build.VERSION.SDK_INT>=34)requestPermissions(new String[]{Manifest.permission.READ_MEDIA_IMAGES,Manifest.permission.READ_MEDIA_VIDEO,Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED},REQ_MEDIA);
+        else if(Build.VERSION.SDK_INT>=33)requestPermissions(new String[]{Manifest.permission.READ_MEDIA_IMAGES,Manifest.permission.READ_MEDIA_VIDEO},REQ_MEDIA);
+        else requestPermissions(new String[]{Manifest.permission.READ_EXTERNAL_STORAGE},REQ_MEDIA);
+    }
+
+    @Override public void onRequestPermissionsResult(int r,String[] p,int[] g){
+        super.onRequestPermissionsResult(r,p,g);
+        if(r==REQ_MEDIA){
+            if(fullAccess()){setStatus("Full media access granted ✓");}
+            else setStatus("Partial/no access. Android Settings can change photo/video access.");
+        }
+    }
+
+    void setStatus(String s){runOnUiThread(()->status.setText(s));}
+
+    @Override protected void onResume(){
+        super.onResume();
+        if(pageReady){main.postDelayed(()->injectTargets(),250);main.postDelayed(()->injectTargets(),900);}
+    }
+
+    static String q(String s){
+        if(s==null)return "null";
+        return "'"+s.replace("\\","\\\\").replace("'","\\'").replace("\n"," ")+"'";
+    }
+    Button button(String s){
+        Button b=new Button(this);b.setText(s);b.setTextSize(10);b.setTextColor(Color.WHITE);b.setAllCaps(false);
+        b.setMinHeight(0);b.setMinimumHeight(0);b.setPadding(dp(9),0,dp(9),0);return b;
+    }
+    TextView label(String s,int size,boolean bold){TextView t=new TextView(this);t.setText(s);t.setTextSize(size);t.setTextColor(Color.WHITE);t.setTypeface(null,bold?1:0);return t;}
+    View space(int w){Space s=new Space(this);s.setLayoutParams(new LinearLayout.LayoutParams(dp(w),1));return s;}
+    int dp(int n){return (int)(n*getResources().getDisplayMetrics().density+.5f);}
+
+    public class Bridge{
+        @JavascriptInterface public void ready(){runOnUiThread(()->{if(status!=null&&!uploading)status.setText(placing?"Targets highlighted · tap a block":"Ready · tap ADD to choose media");});}
+        @JavascriptInterface public void target(String slot){runOnUiThread(()->MainActivity.this.target(slot));}
+    }
 }
