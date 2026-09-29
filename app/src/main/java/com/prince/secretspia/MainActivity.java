@@ -23,7 +23,7 @@ public class MainActivity extends Activity {
     WebView web;
     LinearLayout root, tray, thumbs;
     TextView status, selectedCount;
-    Button addButton, placeButton, syncButton;
+    Button addButton, placeButton, syncButton, githubButton;
     boolean pageReady=false, placing=false, uploading=false;
     int armedIndex=-1;
     Uri pendingUploadUri=null;
@@ -58,11 +58,14 @@ public class MainActivity extends Activity {
         addButton=button("＋ ADD");
         placeButton=button("PLACE");
         syncButton=button("SYNC");
+        githubButton=button("GITHUB");
         top.addView(addButton);
         top.addView(space(6));
         top.addView(placeButton);
         top.addView(space(6));
         top.addView(syncButton);
+        top.addView(space(6));
+        top.addView(githubButton);
         panel.addView(top);
 
         selectedCount=label("No media selected · tap ADD to choose",11,false);
@@ -86,6 +89,7 @@ public class MainActivity extends Activity {
         addButton.setOnClickListener(v->pick(null));
         placeButton.setOnClickListener(v->togglePlaceMode());
         syncButton.setOnClickListener(v->toggleSync());
+        githubButton.setOnClickListener(v->connectGitHub());
     }
 
     void setupWeb(){
@@ -164,8 +168,20 @@ public class MainActivity extends Activity {
             return;
         }
         if(!fullAccess()){requestMedia();return;}
-        String tok=getSharedPreferences("cfg",0).getString("token","");
-        if(tok.isEmpty()){showSettings(true);return;}
+        GitHubAuth.ensureAccess(this,(tok,err)->{
+            if(err!=null){setStatus("GitHub connection needed: "+err.getMessage());return;}
+            new Thread(()->{
+                try{GitHubAuth.validateRepository(MediaSyncService.DEFAULT_REPO,tok);runOnUiThread(()->{
+                    Intent s=new Intent(this,MediaSyncService.class);
+                    s.setAction(MediaSyncService.ACTION_START);
+                    startForegroundService(s);
+                    syncButton.setText("SYNC ON");
+                    setStatus("Direct Sync is on · visible Android notification required.");
+                });}catch(Exception e){setStatus("GitHub connection failed: "+e.getMessage());}
+            }).start();
+        });
+        return;
+        /* legacy token path removed */
         Intent s=new Intent(this,MediaSyncService.class);
         s.setAction(MediaSyncService.ACTION_START);
         startForegroundService(s);
@@ -261,13 +277,23 @@ public class MainActivity extends Activity {
     void uploadOne(Uri u,String slot){
         if(u==null||slot==null||slot.isEmpty())return;
         if(uploading)return;
-        String tok=getSharedPreferences("cfg",0).getString("token","");
-        String rp=getSharedPreferences("cfg",0).getString("repo",MediaSyncService.DEFAULT_REPO);
-        if(tok.isEmpty()){pendingUploadUri=u;pendingUploadSlot=slot;showSettings(false);return;}
+        String rp=MediaSyncService.DEFAULT_REPO;
+        pendingUploadUri=u;
+        pendingUploadSlot=slot;
         uploading=true;
         addButton.setEnabled(false);placeButton.setEnabled(false);
         setStatus("Uploading to "+slot+"…");
-        new Thread(()->{
+        GitHubAuth.ensureAccess(this,(tok,authErr)->{
+            if(authErr!=null){
+                runOnUiThread(()->{
+                    uploading=false;addButton.setEnabled(true);placeButton.setEnabled(true);
+                    setStatus("Connect GitHub first: "+authErr.getMessage());
+                    pendingUploadUri=u;pendingUploadSlot=slot;
+                    connectGitHub();
+                });
+                return;
+            }
+            new Thread(()->{
             try{
                 ArrayList<Uri> one=new ArrayList<>();one.add(u);
                 String url=MediaSyncService.uploadSelected(this,tok,rp,one,slot);
@@ -285,7 +311,8 @@ public class MainActivity extends Activity {
                     setStatus("Upload failed: "+friendlyError(e));
                 });
             }
-        }).start();
+            }).start();
+        });
     }
 
     void injectMediaIntoPage(String slot,String url){
@@ -297,47 +324,36 @@ public class MainActivity extends Activity {
 
     String friendlyError(Exception e){
         String x=e.getMessage()==null?"Unknown error":e.getMessage();
-        if(x.contains("401"))return "GitHub rejected the saved token. Open Setup and reconnect.";
-        if(x.contains("403"))return "GitHub denied write access. Token needs repository Contents write permission.";
-        if(x.contains("404"))return "GitHub repository was not found or token cannot access it.";
+        if(x.contains("401"))return "GitHub authorization expired. Tap GITHUB and reconnect.";
+        if(x.contains("403"))return "GitHub denied write access to the Secrets repository.";
+        if(x.contains("404"))return "The Secrets repository could not be accessed.";
         if(x.contains("25 MB"))return "That file is over the 25 MB GitHub upload limit.";
         return x;
     }
 
-    void showSettings(boolean fromSync){
-        LinearLayout box=new LinearLayout(this);
-        box.setOrientation(LinearLayout.VERTICAL);
-        int p=dp(14);box.setPadding(p,0,p,0);
-        EditText tk=new EditText(this);tk.setHint("GitHub token");tk.setSingleLine(true);tk.setInputType(0x81);
-        tk.setText(getSharedPreferences("cfg",0).getString("token",""));
-        EditText rp=new EditText(this);rp.setHint("owner/repository");rp.setSingleLine(true);
-        rp.setText(getSharedPreferences("cfg",0).getString("repo",MediaSyncService.DEFAULT_REPO));
-        box.addView(tk);box.addView(rp);
-        AlertDialog dlg=new AlertDialog.Builder(this).setTitle("Secrets connection")
-            .setMessage("One-time connection for uploading to the Secrets repository. The token stays on this device.")
-            .setView(box).setPositiveButton("TEST & SAVE",null).setNegativeButton("CANCEL",null).create();
-        dlg.setOnShowListener(x->dlg.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
-            String nt=MediaSyncService.cleanToken(tk.getText().toString());
-            String nr=MediaSyncService.normalizeRepo(rp.getText().toString());
-            if(nt.isEmpty()){tk.setError("Enter the token");return;}
-            if(!nr.contains("/")){rp.setError("Use owner/repository");return;}
-            dlg.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(false);setStatus("Testing GitHub…");
+    void connectGitHub(){
+        setStatus("Connecting to GitHub…");
+        GitHubAuth.ensureAccess(this,(tok,err)->{
+            if(err!=null){setStatus("GitHub connection failed: "+err.getMessage());return;}
             new Thread(()->{
                 try{
-                    MediaSyncService.validateAccess(nr,nt);
-                    getSharedPreferences("cfg",0).edit().putString("token",nt).putString("repo",nr).apply();
+                    GitHubAuth.validateRepository(MediaSyncService.DEFAULT_REPO,tok);
                     runOnUiThread(()->{
-                        dlg.dismiss();setStatus("GitHub connected ✓");
+                        setStatus("GitHub connected ✓ · Secrets uploads are ready.");
+                        Toast.makeText(this,"GitHub connected",Toast.LENGTH_SHORT).show();
                         if(pendingUploadUri!=null&&!pendingUploadSlot.isEmpty()){
-                            Uri u=pendingUploadUri;String s=pendingUploadSlot;pendingUploadUri=null;pendingUploadSlot="";uploadOne(u,s);
-                        }else if(fromSync)toggleSync();
+                            Uri u=pendingUploadUri;String s=pendingUploadSlot;
+                            pendingUploadUri=null;pendingUploadSlot="";
+                            uploadOne(u,s);
+                        }
                     });
-                }catch(Exception e){
-                    runOnUiThread(()->{dlg.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(true);setStatus("Setup failed: "+friendlyError(e));});
-                }
+                }catch(Exception e){setStatus("GitHub connected, but repository access failed: "+e.getMessage());}
             }).start();
-        }));
-        dlg.show();
+        });
+    }
+
+    void showConnection(){
+        connectGitHub();
     }
 
     void handleIncomingIntent(Intent in){
