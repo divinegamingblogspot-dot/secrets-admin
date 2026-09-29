@@ -39,7 +39,7 @@ public class MainActivity extends Activity {
     public class Bridge{
         @JavascriptInterface public void ready(){setStatus("Ready · choose media from Gallery.");}
         @JavascriptInterface public void pick(){runOnUiThread(()->MainActivity.this.pick(null));}
-        @JavascriptInterface public void pickForSlot(String slot){runOnUiThread(()->MainActivity.this.pick(slot));}
+        @JavascriptInterface public void pickForSlot(String slot){runOnUiThread(()->{if(!selected.isEmpty()){uploadOne(selected.get(0),slot);}else MainActivity.this.pick(slot);});}
         @JavascriptInterface public void direct(boolean on){runOnUiThread(()->{if(on)startDirect();else stopDirect();});}
         @JavascriptInterface public void upload(String id,String slot){try{int i=Integer.parseInt(id);if(i>=0&&i<selected.size())runOnUiThread(()->uploadOne(selected.get(i),slot));}catch(Exception ignored){}}
     }
