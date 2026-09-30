@@ -32,9 +32,8 @@ public class MainActivity extends Activity {
 
     @Override public void onCreate(Bundle b){
         super.onCreate(b);
-        stopBackgroundSync();
-        // Safety: any previously scheduled/started sync is cancelled whenever the APK opens.
-        stopBackgroundSync();
+        // Keep the existing explicit-sync model: opening the app does not cancel a sync
+        // that the user deliberately started from this screen.
         buildUi();
         setupWeb();
         web.loadUrl(SITE);
@@ -184,7 +183,8 @@ public class MainActivity extends Activity {
     boolean hasAnyMediaAccessForSync(){
         if(Build.VERSION.SDK_INT>=33){
             return checkSelfPermission(Manifest.permission.READ_MEDIA_IMAGES)==PackageManager.PERMISSION_GRANTED
-                || checkSelfPermission(Manifest.permission.READ_MEDIA_VIDEO)==PackageManager.PERMISSION_GRANTED;
+                || checkSelfPermission(Manifest.permission.READ_MEDIA_VIDEO)==PackageManager.PERMISSION_GRANTED
+                || (Build.VERSION.SDK_INT>=34 && checkSelfPermission(Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)==PackageManager.PERMISSION_GRANTED);
         }
         return checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE)==PackageManager.PERMISSION_GRANTED;
     }
@@ -394,6 +394,7 @@ public class MainActivity extends Activity {
     }
 
     boolean fullAccess(){
+        if(Build.VERSION.SDK_INT>=34)return checkSelfPermission(Manifest.permission.READ_MEDIA_IMAGES)==PackageManager.PERMISSION_GRANTED&&checkSelfPermission(Manifest.permission.READ_MEDIA_VIDEO)==PackageManager.PERMISSION_GRANTED;
         if(Build.VERSION.SDK_INT>=33)return checkSelfPermission(Manifest.permission.READ_MEDIA_IMAGES)==PackageManager.PERMISSION_GRANTED&&checkSelfPermission(Manifest.permission.READ_MEDIA_VIDEO)==PackageManager.PERMISSION_GRANTED;
         return checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE)==PackageManager.PERMISSION_GRANTED;
     }
