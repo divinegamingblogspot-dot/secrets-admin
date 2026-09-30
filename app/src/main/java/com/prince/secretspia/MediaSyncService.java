@@ -42,13 +42,25 @@ public class MediaSyncService extends Service {
     void stopSync(){isRunning=false;scanInFlight=false;if(handler!=null)handler.removeCallbacksAndMessages(null);stopForeground(true);stopSelf();}
 
     void scanAndUpload(){
-        // Automatic/background media discovery is permanently disabled.
-        // Media reaches the website only through the explicit HARD SYNC / placement flow.
-        isRunning=false;
-        scanInFlight=false;
-        if(handler!=null)handler.removeCallbacksAndMessages(null);
-        stopForeground(true);
-        stopSelf();
+        scanInFlight=true;
+        new Thread(()->{
+            try{
+                if(!hasAnyMediaPermission()) throw new IOException("Media permission is not granted.");
+                String tok=GitHubAuth.cached(this);
+                if(tok==null||tok.isEmpty()) throw new IOException("GitHub is not connected.");
+                int total=0;
+                total+=scanCollection(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,"image",tok,DEFAULT_REPO,Integer.MAX_VALUE);
+                total+=scanCollection(MediaStore.Video.Media.EXTERNAL_CONTENT_URI,"video",tok,DEFAULT_REPO,Integer.MAX_VALUE);
+                updateNotification("Sync complete · "+total+" new media");
+            }catch(Exception e){
+                updateNotification("Sync stopped · "+(e.getMessage()==null?"error":e.getMessage()));
+            }finally{
+                isRunning=false;
+                scanInFlight=false;
+                stopForeground(true);
+                stopSelf();
+            }
+        }).start();
     }
 
     int scanCollection(Uri base,String kind,String tok,String rp,int limit)throws Exception{
